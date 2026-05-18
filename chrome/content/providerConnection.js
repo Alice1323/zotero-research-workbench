@@ -31,22 +31,20 @@
         return { ok: false, message: modelCheck.message };
       }
 
-      const response = await fetchImpl(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: "user", content: "ping" }],
-          max_tokens: 1,
-          temperature: 0
-        }),
-        signal: controller.signal
-      });
+      const response = await requestChatCompletion({ baseUrl, apiKey, model, fetchImpl, signal: controller.signal });
 
       if (response.ok) {
+        if (!modelCheck.modelListed) {
+          const probeCheck = await verifyImpossibleModelIsRejected({
+            baseUrl,
+            apiKey,
+            fetchImpl,
+            signal: controller.signal
+          });
+          if (!probeCheck.ok) {
+            return probeCheck;
+          }
+        }
         return {
           ok: true,
           message: modelCheck.listAvailable ? "连接成功" : "连接成功（模型列表不可用，已通过实际请求验证）"
@@ -73,6 +71,23 @@
     }
   }
 
+  async function requestChatCompletion({ baseUrl, apiKey, model, fetchImpl, signal }) {
+    return fetchImpl(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: "ping" }],
+        max_tokens: 1,
+        temperature: 0
+      }),
+      signal
+    });
+  }
+
   async function inspectModelList({ baseUrl, apiKey, model, fetchImpl, signal }) {
     const response = await fetchImpl(`${baseUrl.replace(/\/+$/, "")}/models`, {
       method: "GET",
@@ -97,6 +112,33 @@
       ? body.data.map((entry) => entry && entry.id).filter(Boolean)
       : [];
     return { fatal: false, listAvailable: true, modelListed: modelIds.includes(model) };
+  }
+
+  async function verifyImpossibleModelIsRejected({ baseUrl, apiKey, fetchImpl, signal }) {
+    const response = await requestChatCompletion({
+      baseUrl,
+      apiKey,
+      model: "zotero-research-workbench-invalid-model-probe",
+      fetchImpl,
+      signal
+    });
+
+    if (response.ok) {
+      return {
+        ok: false,
+        message: "无法验证模型名称：接口接受了不存在的模型，请检查模型名称"
+      };
+    }
+    if (response.status === 401 || response.status === 403) {
+      return { ok: false, message: "API 密钥无效" };
+    }
+    if (response.status === 408 || response.status === 504) {
+      return { ok: false, message: "请求超时" };
+    }
+    if ([400, 404, 422].includes(response.status)) {
+      return { ok: true };
+    }
+    return { ok: false, message: `模型验证失败（HTTP ${response.status}）` };
   }
 
   async function readResponseJson(response) {

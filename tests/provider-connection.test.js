@@ -114,6 +114,14 @@ test("connection test accepts detectable model when /models omits alias but chat
             })
           };
         }
+        const body = JSON.parse(options.body);
+        if (body.model.includes("invalid-model-probe")) {
+          return {
+            ok: false,
+            status: 400,
+            text: async () => "model invalid-model-probe not found"
+          };
+        }
         return {
           ok: true,
           status: 200,
@@ -126,8 +134,14 @@ test("connection test accepts detectable model when /models omits alias but chat
   assert.deepEqual(result, { ok: true, message: "连接成功" });
   assert.deepEqual(
     calls.map((call) => call.url),
-    ["https://api.example.test/v1/models", "https://api.example.test/v1/chat/completions"]
+    [
+      "https://api.example.test/v1/models",
+      "https://api.example.test/v1/chat/completions",
+      "https://api.example.test/v1/chat/completions"
+    ]
   );
+  assert.equal(JSON.parse(calls[1].options.body).model, "provider-alias-model");
+  assert.match(JSON.parse(calls[2].options.body).model, /invalid-model-probe/);
 });
 
 test("connection test rejects model when chat response explicitly reports model error", async () => {
@@ -166,9 +180,17 @@ test("connection test can pass when /models endpoint is unsupported but chat suc
       model: "chat-only-model"
     },
     {
-      fetch: async (url) => {
+      fetch: async (url, options) => {
         if (url.endsWith("/models")) {
           return { ok: false, status: 404, text: async () => "not found" };
+        }
+        const body = JSON.parse(options.body);
+        if (body.model.includes("invalid-model-probe")) {
+          return {
+            ok: false,
+            status: 400,
+            text: async () => "model invalid-model-probe not found"
+          };
         }
         return {
           ok: true,
@@ -180,4 +202,35 @@ test("connection test can pass when /models endpoint is unsupported but chat suc
   );
 
   assert.deepEqual(result, { ok: true, message: "连接成功（模型列表不可用，已通过实际请求验证）" });
+});
+
+test("connection test does not report success when provider accepts an impossible sentinel model", async () => {
+  const result = await testOpenAICompatibleConnection(
+    {
+      baseUrl: "https://api.example.test/v1",
+      apiKey: "sk-secret",
+      model: "definitely-not-a-real-model"
+    },
+    {
+      fetch: async (url) => {
+        if (url.endsWith("/models")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ data: [{ id: "moonshot-v1" }] })
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ choices: [{ message: { content: "ok" } }] })
+        };
+      }
+    }
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    message: "无法验证模型名称：接口接受了不存在的模型，请检查模型名称"
+  });
 });
