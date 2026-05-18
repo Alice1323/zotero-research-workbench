@@ -9,12 +9,20 @@
     return document.getElementById(id);
   }
 
+  function getZotero() {
+    return window.arguments?.[0]?.Zotero || window.opener?.Zotero || window.Zotero;
+  }
+
   function getPref(key) {
-    return window.Zotero?.Prefs?.get(key) || "";
+    return getZotero()?.Prefs?.get(key) || "";
   }
 
   function setPref(key, value) {
-    window.Zotero?.Prefs?.set(key, value);
+    const zotero = getZotero();
+    if (!zotero?.Prefs?.set) {
+      throw new Error("Zotero preferences are unavailable");
+    }
+    zotero.Prefs.set(key, value);
   }
 
   function loadSettings() {
@@ -45,12 +53,17 @@
       return;
     }
 
-    setPref(PREFS.baseUrl, baseUrl);
-    setPref(PREFS.model, model);
-    if (apiKey) {
-      setPref(PREFS.apiKey, apiKey);
-      getField("provider-api-key").value = "";
-      getField("provider-api-key").placeholder = "已保存，留空则保持不变";
+    try {
+      setPref(PREFS.baseUrl, baseUrl);
+      setPref(PREFS.model, model);
+      if (apiKey) {
+        setPref(PREFS.apiKey, apiKey);
+        getField("provider-api-key").value = "";
+        getField("provider-api-key").placeholder = "已保存，留空则保持不变";
+      }
+    } catch (_error) {
+      status.textContent = "设置保存失败，请重启 Zotero 后再试";
+      return;
     }
     status.textContent = "设置已保存";
   }

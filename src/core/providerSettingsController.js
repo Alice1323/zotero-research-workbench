@@ -49,12 +49,17 @@ function createProviderSettingsController({ document, storage }) {
       return;
     }
 
-    storage.set(PROVIDER_PREFS.baseUrl, baseUrl);
-    storage.set(PROVIDER_PREFS.model, model);
-    if (apiKey) {
-      storage.set(PROVIDER_PREFS.apiKey, apiKey);
-      fields.apiKey.value = "";
-      fields.apiKey.placeholder = "已保存，留空则保持不变";
+    try {
+      storage.set(PROVIDER_PREFS.baseUrl, baseUrl);
+      storage.set(PROVIDER_PREFS.model, model);
+      if (apiKey) {
+        storage.set(PROVIDER_PREFS.apiKey, apiKey);
+        fields.apiKey.value = "";
+        fields.apiKey.placeholder = "已保存，留空则保持不变";
+      }
+    } catch (_error) {
+      fields.status.textContent = "设置保存失败，请重启 Zotero 后再试";
+      return;
     }
     fields.status.textContent = "设置已保存";
   }

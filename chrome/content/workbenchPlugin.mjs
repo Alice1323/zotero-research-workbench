@@ -55,7 +55,8 @@ export class WorkbenchPlugin {
     win.openDialog(
       "chrome://zotero-research-workbench/content/researchPanel.xhtml",
       "zotero-research-workbench-panel",
-      "chrome,centerscreen,resizable,width=520,height=640"
+      "chrome,centerscreen,resizable,width=520,height=640",
+      { Zotero: this.Zotero }
     );
   }
 

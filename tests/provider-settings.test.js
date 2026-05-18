@@ -57,6 +57,27 @@ test("provider settings require base URL and model before saving", () => {
   assert.equal(store.size, 0);
 });
 
+test("provider settings do not show success when storage is unavailable", () => {
+  const storage = {
+    get() {
+      return "";
+    },
+    set() {
+      throw new Error("storage unavailable");
+    }
+  };
+  const document = createFakeDocument({
+    baseUrl: "https://api.example.test/v1",
+    apiKey: "sk-test-secret",
+    model: "moonshot-v1"
+  });
+
+  createProviderSettingsController({ document, storage }).init();
+  document.saveButton.click();
+
+  assert.equal(document.status.textContent, "设置保存失败，请重启 Zotero 后再试");
+});
+
 function createFakeDocument(values) {
   const elements = {
     "provider-base-url": { value: values.baseUrl, placeholder: "" },
