@@ -61,9 +61,31 @@
     try {
       const summary = await requestPaperSummary({ paper, settings, fetchImpl: window.fetch.bind(window) });
       output.textContent = summary;
+      window.WorkbenchLastSummary = summary;
       status.textContent = "总结已生成";
     } catch (error) {
       status.textContent = error?.message || "总结生成失败";
+    }
+  }
+
+  async function copyGeneratedResult() {
+    const status = getField("paper-summary-status");
+    const summary = cleanText(getField("paper-summary-output").textContent);
+    if (!summary) {
+      status.textContent = "暂无可复制的生成结果";
+      return;
+    }
+
+    const text = buildSummaryCopyText({
+      paper: window.WorkbenchSelectedPaper || {},
+      summary
+    });
+
+    try {
+      await writeClipboardText(text);
+      status.textContent = "生成结果已复制";
+    } catch (_error) {
+      status.textContent = "复制失败，请手动选择生成结果";
     }
   }
 
@@ -128,8 +150,8 @@
       key: cleanText(input.key),
       itemType: cleanText(input.itemType),
       title: cleanText(input.title) || "未命名条目",
-      authors: formatCreators(input.creators),
-      year: extractYear(input.date),
+      authors: cleanText(input.authors) || formatCreators(input.creators),
+      year: cleanText(input.year) || extractYear(input.date),
       publicationTitle: cleanText(input.publicationTitle) || "未记录",
       abstractNote: cleanText(input.abstractNote) || "未记录摘要",
       doi: cleanText(input.doi) || "未记录"
@@ -166,6 +188,42 @@
       throw new Error("LLM 响应为空");
     }
     return text.trim();
+  }
+
+  function buildSummaryCopyText({ paper, summary }) {
+    const normalized = normalizePaperContext(paper || {});
+    return [
+      "Zotero 研究工作台 - 文献总结",
+      "",
+      `标题：${normalized.title}`,
+      `作者：${normalized.authors}`,
+      `年份：${normalized.year}`,
+      `期刊/来源：${normalized.publicationTitle}`,
+      `DOI：${normalized.doi}`,
+      "",
+      "生成结果：",
+      cleanText(summary)
+    ].join("\n");
+  }
+
+  async function writeClipboardText(text) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "readonly");
+    textarea.style.position = "fixed";
+    textarea.style.inset = "-1000px auto auto -1000px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand?.("copy");
+    textarea.remove();
+    if (!copied) {
+      throw new Error("copy failed");
+    }
   }
 
   async function readResponseText(response) {
@@ -222,6 +280,7 @@
   function init() {
     getField("refresh-paper-context").addEventListener("click", refreshSelectedPaper);
     getField("summarize-selected-paper").addEventListener("click", summarizeSelectedPaper);
+    getField("copy-paper-summary").addEventListener("click", copyGeneratedResult);
     refreshSelectedPaper();
   }
 
@@ -233,6 +292,8 @@
 
   window.WorkbenchPaperSummary = {
     buildChinesePaperSummaryPrompt,
+    buildSummaryCopyText,
+    copyGeneratedResult,
     normalizePaperContext,
     parseChatCompletionText,
     readSelectedPaperContext,

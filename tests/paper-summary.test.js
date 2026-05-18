@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   buildChinesePaperSummaryPrompt,
+  buildSummaryCopyText,
   normalizePaperContext,
   parseChatCompletionText,
   requestPaperSummary
@@ -113,5 +114,34 @@ test("requestPaperSummary reports Chinese error when provider returns non-JSON b
         })
       }),
     /LLM 服务返回了无法解析的响应/
+  );
+});
+
+test("buildSummaryCopyText formats selected paper metadata and generated result", () => {
+  const text = buildSummaryCopyText({
+    paper: {
+      title: "Metformin and gut microbiota in PCOS",
+      authors: "Li Wang",
+      year: "2026",
+      publicationTitle: "Journal of Endocrine Research",
+      doi: "10.1000/pcos.2026"
+    },
+    summary: "研究问题：示例问题\n主要发现：示例发现"
+  });
+
+  assert.equal(
+    text,
+    [
+      "Zotero 研究工作台 - 文献总结",
+      "",
+      "标题：Metformin and gut microbiota in PCOS",
+      "作者：Li Wang",
+      "年份：2026",
+      "期刊/来源：Journal of Endocrine Research",
+      "DOI：10.1000/pcos.2026",
+      "",
+      "生成结果：",
+      "研究问题：示例问题\n主要发现：示例发现"
+    ].join("\n")
   );
 });

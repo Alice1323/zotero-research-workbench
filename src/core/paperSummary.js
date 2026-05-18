@@ -4,8 +4,8 @@ function normalizePaperContext(input) {
     key: cleanText(input.key),
     itemType: cleanText(input.itemType),
     title,
-    authors: formatCreators(input.creators),
-    year: extractYear(input.date),
+    authors: cleanText(input.authors) || formatCreators(input.creators),
+    year: cleanText(input.year) || extractYear(input.date),
     publicationTitle: cleanText(input.publicationTitle) || "未记录",
     abstractNote: cleanText(input.abstractNote) || "未记录摘要",
     doi: cleanText(input.doi) || "未记录"
@@ -42,6 +42,22 @@ function parseChatCompletionText(body) {
     throw new Error("LLM 响应为空");
   }
   return text.trim();
+}
+
+function buildSummaryCopyText({ paper, summary }) {
+  const normalized = normalizePaperContext(paper || {});
+  return [
+    "Zotero 研究工作台 - 文献总结",
+    "",
+    `标题：${normalized.title}`,
+    `作者：${normalized.authors}`,
+    `年份：${normalized.year}`,
+    `期刊/来源：${normalized.publicationTitle}`,
+    `DOI：${normalized.doi}`,
+    "",
+    "生成结果：",
+    cleanText(summary)
+  ].join("\n");
 }
 
 async function requestPaperSummary({ paper, settings, fetchImpl }) {
@@ -124,6 +140,7 @@ function cleanText(value) {
 
 module.exports = {
   buildChinesePaperSummaryPrompt,
+  buildSummaryCopyText,
   normalizePaperContext,
   parseChatCompletionText,
   requestPaperSummary
