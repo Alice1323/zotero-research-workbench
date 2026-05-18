@@ -68,12 +68,27 @@
     status.textContent = "设置已保存";
   }
 
+  async function testSavedConnection() {
+    const status = getField("provider-status");
+    const connection = window.WorkbenchProviderConnection;
+    if (!connection?.testOpenAICompatibleConnection) {
+      status.textContent = "测试连接未配置";
+      return;
+    }
+
+    status.textContent = "正在测试连接...";
+    const result = await connection.testOpenAICompatibleConnection({
+      baseUrl: getPref(PREFS.baseUrl) || getField("provider-base-url").value.trim(),
+      apiKey: getPref(PREFS.apiKey) || getField("provider-api-key").value.trim(),
+      model: getPref(PREFS.model) || getField("provider-model").value.trim()
+    });
+    status.textContent = result.message;
+  }
+
   function init() {
     loadSettings();
     getField("provider-save").addEventListener("click", saveSettings);
-    getField("provider-test").addEventListener("click", () => {
-      getField("provider-status").textContent = "测试连接将在下一步接入";
-    });
+    getField("provider-test").addEventListener("click", testSavedConnection);
   }
 
   if (document.readyState === "loading") {

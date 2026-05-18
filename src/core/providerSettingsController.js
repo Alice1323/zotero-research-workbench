@@ -4,7 +4,7 @@ const PROVIDER_PREFS = {
   model: "extensions.zotero-research-workbench.provider.model"
 };
 
-function createProviderSettingsController({ document, storage }) {
+function createProviderSettingsController({ document, storage, testConnection }) {
   const fields = {
     baseUrl: document.getElementById("provider-base-url"),
     apiKey: document.getElementById("provider-api-key"),
@@ -17,9 +17,7 @@ function createProviderSettingsController({ document, storage }) {
   function init() {
     load();
     fields.saveButton.addEventListener("click", save);
-    fields.testButton.addEventListener("click", () => {
-      fields.status.textContent = "测试连接将在下一步接入";
-    });
+    fields.testButton.addEventListener("click", testSavedConnection);
   }
 
   function load() {
@@ -64,7 +62,21 @@ function createProviderSettingsController({ document, storage }) {
     fields.status.textContent = "设置已保存";
   }
 
-  return { init, load, save };
+  async function testSavedConnection() {
+    if (!testConnection) {
+      fields.status.textContent = "测试连接未配置";
+      return;
+    }
+    fields.status.textContent = "正在测试连接...";
+    const result = await testConnection({
+      baseUrl: storage.get(PROVIDER_PREFS.baseUrl) || fields.baseUrl.value.trim(),
+      apiKey: storage.get(PROVIDER_PREFS.apiKey) || fields.apiKey.value.trim(),
+      model: storage.get(PROVIDER_PREFS.model) || fields.model.value.trim()
+    });
+    fields.status.textContent = result.message;
+  }
+
+  return { init, load, save, testSavedConnection };
 }
 
 module.exports = {

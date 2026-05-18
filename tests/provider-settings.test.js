@@ -78,6 +78,38 @@ test("provider settings do not show success when storage is unavailable", () => 
   assert.equal(document.status.textContent, "设置保存失败，请重启 Zotero 后再试");
 });
 
+test("provider settings test button reads saved settings and reports connection result", async () => {
+  const store = new Map([
+    ["extensions.zotero-research-workbench.provider.baseUrl", "https://api.example.test/v1"],
+    ["extensions.zotero-research-workbench.provider.apiKey", "sk-test-secret"],
+    ["extensions.zotero-research-workbench.provider.model", "moonshot-v1"]
+  ]);
+  const storage = {
+    get(key) {
+      return store.get(key);
+    },
+    set(key, value) {
+      store.set(key, value);
+    }
+  };
+  const document = createFakeDocument({ baseUrl: "", apiKey: "", model: "" });
+
+  createProviderSettingsController({
+    document,
+    storage,
+    testConnection: async (settings) => {
+      assert.equal(settings.baseUrl, "https://api.example.test/v1");
+      assert.equal(settings.apiKey, "sk-test-secret");
+      assert.equal(settings.model, "moonshot-v1");
+      return { ok: true, message: "连接成功" };
+    }
+  }).init();
+
+  await document.testButton.click();
+
+  assert.equal(document.status.textContent, "连接成功");
+});
+
 function createFakeDocument(values) {
   const elements = {
     "provider-base-url": { value: values.baseUrl, placeholder: "" },
@@ -94,6 +126,7 @@ function createFakeDocument(values) {
     model: elements["provider-model"],
     status: elements["provider-status"],
     saveButton: elements["provider-save"],
+    testButton: elements["provider-test"],
     getElementById(id) {
       return elements[id] || null;
     }
@@ -107,7 +140,7 @@ function createButton() {
       this.listener = listener;
     },
     click() {
-      this.listener();
+      return this.listener();
     }
   };
 }

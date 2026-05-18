@@ -71,6 +71,8 @@ The panel saves these values to Zotero preferences:
 
 After saving, the panel shows `设置已保存`. When reopened, it reloads `接口地址` and `模型名称`; the API key field stays blank and shows `已保存，留空则保持不变`.
 
+`测试连接` sends a minimal OpenAI-compatible `/chat/completions` request using the saved provider settings. It reports Chinese status messages such as `连接成功`, `API 密钥无效`, `模型不可用或接口路径不兼容`, `接口地址不可用`, and `请求超时`.
+
 ## Boundaries
 
 The project does not support Zotero 7. It does not ship a full Citation Graph UI, Visual Workflow Builder, batch processing UI, Sci-Hub provider, Google Scholar scraping, arbitrary user scripts, or live cloud sync.
