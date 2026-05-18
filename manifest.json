@@ -1,0 +1,14 @@
+{
+  "manifest_version": 2,
+  "name": "Zotero Research Workbench",
+  "version": "0.1.0",
+  "description": "Single-paper reading workflow workbench for Zotero 8/9.",
+  "applications": {
+    "zotero": {
+      "id": "zotero-research-workbench@local",
+      "update_url": "https://example.invalid/zotero-research-workbench/updates.json",
+      "strict_min_version": "8.0",
+      "strict_max_version": "9.*"
+    }
+  }
+}

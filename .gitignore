@@ -1,0 +1,4 @@
+dist/*.xpi
+dist/package/
+node_modules/
+*.log
