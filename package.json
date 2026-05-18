@@ -6,7 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "check": "node --check bootstrap.js && node --check chrome/content/workbenchPlugin.mjs && node --check chrome/content/providerConnection.js && node --check chrome/content/providerSettings.js && node --check src/core/index.js && node --check src/core/providerConnection.js && node --check src/core/providerSettingsController.js",
+    "check": "node --check bootstrap.js && node --check chrome/content/workbenchPlugin.mjs && node --check chrome/content/providerConnection.js && node --check chrome/content/providerSettings.js && node --check chrome/content/paperSummary.js && node --check src/core/index.js && node --check src/core/providerConnection.js && node --check src/core/providerSettingsController.js && node --check src/core/paperSummary.js",
     "package": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-xpi.ps1"
   },
   "engines": {

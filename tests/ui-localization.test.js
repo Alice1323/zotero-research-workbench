@@ -25,7 +25,10 @@ test("research panel exposes Chinese LLM provider settings", () => {
   for (const text of [
     "Zotero 研究工作台",
     "研究面板",
-    "当前条目操作会显示在这里。",
+    "选中文献",
+    "刷新当前上下文",
+    "总结选中文献",
+    "生成结果",
     "全局入口",
     "LLM 服务商设置",
     "接口地址",

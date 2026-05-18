@@ -13,6 +13,7 @@ test("build script exists and documents the runtime package boundary", () => {
   assert.match(script, /manifest\.json/);
   assert.match(script, /bootstrap\.js/);
   assert.match(script, /chrome\/content/);
+  assert.match(script, /paperSummary\.js/);
   assert.match(script, /dist/);
   assert.match(script, /zotero-research-workbench-\$Version\.xpi/);
   assert.doesNotMatch(script, /docs\/superpowers/);

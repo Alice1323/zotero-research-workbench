@@ -20,8 +20,9 @@ This repository starts with a small, testable core and a Zotero plugin shell. Th
 The first implementation slice contains:
 
 - Zotero plugin metadata and startup hooks;
-- a Chinese Research Panel placeholder view;
+- a Chinese Research Panel that reads the currently selected Zotero item;
 - a Chinese LLM Provider settings section that saves to Zotero preferences;
+- a `总结选中文献` action that sends selected item metadata to an OpenAI-compatible chat endpoint and displays a Chinese reading summary;
 - provider configuration redaction;
 - in-memory Workbench Local Store;
 - prompt task template rendering with a safe variable whitelist;
@@ -71,7 +72,13 @@ The panel saves these values to Zotero preferences:
 
 After saving, the panel shows `设置已保存`. When reopened, it reloads `接口地址` and `模型名称`; the API key field stays blank and shows `已保存，留空则保持不变`.
 
-`测试连接` sends a minimal OpenAI-compatible `/chat/completions` request using the saved provider settings. It reports Chinese status messages such as `连接成功`, `API 密钥无效`, `模型不可用或接口路径不兼容`, `接口地址不可用`, and `请求超时`.
+`测试连接` sends a minimal OpenAI-compatible `/chat/completions` request using the saved provider settings. It reports Chinese status messages such as `连接成功`, `API 密钥无效`, `模型不可用`, `接口地址不可用`, `请求超时`, and `连接可用，但接口未校验模型名称，请确认模型名称已填写正确`.
+
+## Paper Summary Behavior
+
+The Research Panel reads only the current Zotero selection. It displays title, creators, year, source, and abstract. `总结选中文献` sends those fields to the configured OpenAI-compatible provider and renders the generated Chinese summary in the panel.
+
+This action does not write notes, tags, attachments, or item fields back to Zotero. It is a draft-only display path for the current slice.
 
 ## Boundaries
 

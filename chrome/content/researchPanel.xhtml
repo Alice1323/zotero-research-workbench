@@ -35,6 +35,38 @@
         min-height: 28px;
       }
 
+      .paper-context {
+        display: grid;
+        gap: 6px;
+        margin-block: 10px 12px;
+      }
+
+      .paper-title {
+        font-weight: 600;
+      }
+
+      .paper-meta,
+      .status {
+        color: color-mix(in srgb, CanvasText 72%, transparent);
+      }
+
+      .paper-abstract {
+        max-height: 90px;
+        overflow: auto;
+        line-height: 1.45;
+      }
+
+      .summary-output {
+        min-height: 120px;
+        max-height: 260px;
+        overflow: auto;
+        white-space: pre-wrap;
+        border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+        border-radius: 6px;
+        padding: 10px;
+        line-height: 1.5;
+      }
+
       .field-grid {
         display: grid;
         gap: 8px;
@@ -59,14 +91,26 @@
     </style>
     <script src="providerConnection.js"></script>
     <script src="providerSettings.js"></script>
+    <script src="paperSummary.js"></script>
   </head>
   <body>
     <main>
       <h1>Zotero 研究工作台</h1>
       <section>
         <strong>研究面板</strong>
-        <p>当前条目操作会显示在这里。</p>
-        <button type="button">刷新当前上下文</button>
+        <div class="paper-context" aria-live="polite">
+          <span>选中文献</span>
+          <div id="selected-paper-title" class="paper-title">未选择文献</div>
+          <div id="selected-paper-meta" class="paper-meta">请在 Zotero 主窗口中选中一篇文献</div>
+          <div id="selected-paper-abstract" class="paper-abstract"></div>
+        </div>
+        <div class="actions">
+          <button id="refresh-paper-context" type="button">刷新当前上下文</button>
+          <button id="summarize-selected-paper" type="button">总结选中文献</button>
+        </div>
+        <p id="paper-summary-status" class="status" aria-live="polite"></p>
+        <strong>生成结果</strong>
+        <div id="paper-summary-output" class="summary-output" aria-live="polite"></div>
       </section>
       <section>
         <strong>全局入口</strong>
