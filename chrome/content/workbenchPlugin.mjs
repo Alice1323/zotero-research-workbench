@@ -36,7 +36,7 @@ export class WorkbenchPlugin {
 
     const item = doc.createXULElement("menuitem");
     item.id = "zrw-open-research-panel";
-    item.setAttribute("label", "Open Research Workbench");
+    item.setAttribute("label", "打开研究工作台");
     item.addEventListener("command", () => this.openResearchPanel());
     toolsMenu.appendChild(item);
   }

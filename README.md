@@ -1,4 +1,4 @@
-# Zotero Research Workbench
+# Zotero 研究工作台
 
 Zotero Research Workbench is a Zotero 8/9-only plugin for a single-paper reading workflow.
 
@@ -11,6 +11,8 @@ The first release is deliberately narrow:
 - capture Graph Seeds with evidence and provenance;
 - export and import Workbench Local Store snapshots without Secret Material.
 
+The user-visible interface defaults to Chinese because the first target users are in China.
+
 This repository starts with a small, testable core and a Zotero plugin shell. The core is plain CommonJS so it can be exercised with Node tests before being wired deeper into Zotero APIs.
 
 ## Current Slice
@@ -18,7 +20,8 @@ This repository starts with a small, testable core and a Zotero plugin shell. Th
 The first implementation slice contains:
 
 - Zotero plugin metadata and startup hooks;
-- a Research Panel placeholder view;
+- a Chinese Research Panel placeholder view;
+- a static Chinese LLM Provider settings section;
 - provider configuration redaction;
 - in-memory Workbench Local Store;
 - prompt task template rendering with a safe variable whitelist;

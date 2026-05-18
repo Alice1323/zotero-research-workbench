@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <title>Zotero Research Workbench</title>
+    <title>Zotero 研究工作台</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -34,19 +34,62 @@
       button {
         min-height: 28px;
       }
+
+      .field-grid {
+        display: grid;
+        gap: 8px;
+        margin-block: 10px 12px;
+      }
+
+      label {
+        display: grid;
+        gap: 4px;
+      }
+
+      input {
+        min-height: 28px;
+        box-sizing: border-box;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
     </style>
   </head>
   <body>
     <main>
-      <h1>Zotero Research Workbench</h1>
+      <h1>Zotero 研究工作台</h1>
       <section>
-        <strong>Research Panel</strong>
-        <p>Current item actions will appear here.</p>
-        <button type="button">Open Workbench</button>
+        <strong>研究面板</strong>
+        <p>当前条目操作会显示在这里。</p>
+        <button type="button">刷新当前上下文</button>
       </section>
       <section>
-        <strong>Global Entry Point</strong>
-        <p>Providers, prompt templates, task ledger, export, and import.</p>
+        <strong>全局入口</strong>
+        <p>服务商、提示词模板、任务记录、导出与导入。</p>
+      </section>
+      <section>
+        <strong>LLM 服务商设置</strong>
+        <div class="field-grid">
+          <label>
+            <span>接口地址</span>
+            <input type="url" value="https://api.openai.com/v1" />
+          </label>
+          <label>
+            <span>API 密钥</span>
+            <input type="password" value="" />
+          </label>
+          <label>
+            <span>模型名称</span>
+            <input type="text" value="" placeholder="例如 gpt-4.1-mini" />
+          </label>
+        </div>
+        <div class="actions">
+          <button type="button">保存设置</button>
+          <button type="button">测试连接</button>
+        </div>
       </section>
     </main>
   </body>
