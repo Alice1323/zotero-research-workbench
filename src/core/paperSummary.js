@@ -60,6 +60,33 @@ function buildSummaryCopyText({ paper, summary }) {
   ].join("\n");
 }
 
+function createSummaryDraftInput({ paper, summary, model, createdAt }) {
+  const normalized = normalizePaperContext(paper || {});
+  const timestamp = cleanText(createdAt) || new Date().toISOString();
+  return {
+    id: `draft-${normalized.key || "unknown"}-${createStableTimestamp(timestamp)}`,
+    zoteroItemKey: normalized.key,
+    workId: createWorkId(normalized),
+    title: `${normalized.title} - 中文总结`,
+    content: cleanText(summary),
+    promptTaskTemplateId: "single-paper-chinese-summary",
+    llmProviderId: cleanText(model),
+    inputContext: {
+      title: normalized.title,
+      authors: normalized.authors,
+      year: normalized.year,
+      publicationTitle: normalized.publicationTitle,
+      doi: normalized.doi
+    },
+    createdAt: timestamp,
+    provenance: {
+      source: "zotero-selection",
+      model: cleanText(model),
+      writeTarget: "local-draft-only"
+    }
+  };
+}
+
 async function requestPaperSummary({ paper, settings, fetchImpl }) {
   const response = await fetchImpl(`${settings.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
     method: "POST",
@@ -138,9 +165,21 @@ function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function createWorkId(paper) {
+  if (paper.doi && paper.doi !== "未记录") {
+    return `work:doi:${paper.doi}`;
+  }
+  return `work:zotero:${paper.key || "unknown"}`;
+}
+
+function createStableTimestamp(value) {
+  return value.replace(/[^0-9A-Za-z]+/g, "-").replace(/-$/, "");
+}
+
 module.exports = {
   buildChinesePaperSummaryPrompt,
   buildSummaryCopyText,
+  createSummaryDraftInput,
   normalizePaperContext,
   parseChatCompletionText,
   requestPaperSummary

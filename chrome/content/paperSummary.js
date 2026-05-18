@@ -2,7 +2,8 @@
   const PREFS = {
     baseUrl: "extensions.zotero-research-workbench.provider.baseUrl",
     apiKey: "extensions.zotero-research-workbench.provider.apiKey",
-    model: "extensions.zotero-research-workbench.provider.model"
+    model: "extensions.zotero-research-workbench.provider.model",
+    snapshot: "extensions.zotero-research-workbench.store.snapshot"
   };
 
   function getField(id) {
@@ -15,6 +16,14 @@
 
   function getPref(key) {
     return getZotero()?.Prefs?.get(key) || "";
+  }
+
+  function setPref(key, value) {
+    const zotero = getZotero();
+    if (!zotero?.Prefs?.set) {
+      throw new Error("Zotero preferences are unavailable");
+    }
+    zotero.Prefs.set(key, value);
   }
 
   async function refreshSelectedPaper() {
@@ -62,7 +71,9 @@
       const summary = await requestPaperSummary({ paper, settings, fetchImpl: window.fetch.bind(window) });
       output.textContent = summary;
       window.WorkbenchLastSummary = summary;
+      const draft = saveSummaryDraft({ paper, summary, model: settings.model });
       status.textContent = "总结已生成";
+      renderDraftStatus(draft);
     } catch (error) {
       status.textContent = error?.message || "总结生成失败";
     }
@@ -116,6 +127,74 @@
       ? `${paper.authors}｜${paper.year}｜${paper.publicationTitle}`
       : "请在 Zotero 主窗口中选中一篇文献";
     getField("selected-paper-abstract").textContent = paper?.abstractNote || "";
+  }
+
+  function saveSummaryDraft({ paper, summary, model }) {
+    const snapshot = loadWorkbenchSnapshot();
+    const draftInput = createSummaryDraftInput({
+      paper,
+      summary,
+      model,
+      createdAt: new Date().toISOString()
+    });
+    const draft = {
+      ...draftInput,
+      confirmationState: "draft"
+    };
+
+    snapshot.researchNoteDrafts = snapshot.researchNoteDrafts || [];
+    snapshot.taskLedger = snapshot.taskLedger || [];
+    snapshot.researchNoteDrafts.push(draft);
+    snapshot.taskLedger.push({
+      id: `task-${draft.id}`,
+      workflowStep: "create-research-note-draft",
+      state: "completed",
+      providerId: model,
+      promptTaskTemplateId: draft.promptTaskTemplateId,
+      outputLocation: { draftId: draft.id },
+      errorNotice: null,
+      startedAt: draft.createdAt,
+      completedAt: draft.createdAt,
+      provenance: {
+        source: "zotero-selection",
+        writeTarget: "local-draft-only"
+      }
+    });
+    snapshot.exportedAt = new Date().toISOString();
+    setPref(PREFS.snapshot, JSON.stringify(snapshot));
+    window.WorkbenchLastDraft = draft;
+    return draft;
+  }
+
+  function loadWorkbenchSnapshot() {
+    const raw = getPref(PREFS.snapshot);
+    if (!raw) {
+      return createEmptySnapshot();
+    }
+    try {
+      const snapshot = JSON.parse(raw);
+      return snapshot?.schemaVersion === 1 ? snapshot : createEmptySnapshot();
+    } catch (_error) {
+      return createEmptySnapshot();
+    }
+  }
+
+  function createEmptySnapshot() {
+    return {
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      providers: [],
+      promptTemplates: [],
+      researchNoteDrafts: [],
+      graphSeeds: [],
+      taskLedger: []
+    };
+  }
+
+  function renderDraftStatus(draft) {
+    getField("paper-draft-status").textContent = draft
+      ? `已自动保存为草稿（${formatLocalTime(draft.createdAt)}）`
+      : "当前结果尚未保存";
   }
 
   async function requestPaperSummary({ paper, settings, fetchImpl }) {
@@ -206,6 +285,33 @@
     ].join("\n");
   }
 
+  function createSummaryDraftInput({ paper, summary, model, createdAt }) {
+    const normalized = normalizePaperContext(paper || {});
+    const timestamp = cleanText(createdAt) || new Date().toISOString();
+    return {
+      id: `draft-${normalized.key || "unknown"}-${createStableTimestamp(timestamp)}`,
+      zoteroItemKey: normalized.key,
+      workId: createWorkId(normalized),
+      title: `${normalized.title} - 中文总结`,
+      content: cleanText(summary),
+      promptTaskTemplateId: "single-paper-chinese-summary",
+      llmProviderId: cleanText(model),
+      inputContext: {
+        title: normalized.title,
+        authors: normalized.authors,
+        year: normalized.year,
+        publicationTitle: normalized.publicationTitle,
+        doi: normalized.doi
+      },
+      createdAt: timestamp,
+      provenance: {
+        source: "zotero-selection",
+        model: cleanText(model),
+        writeTarget: "local-draft-only"
+      }
+    };
+  }
+
   async function writeClipboardText(text) {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -277,6 +383,25 @@
     return typeof value === "string" ? value.trim() : "";
   }
 
+  function createWorkId(paper) {
+    if (paper.doi && paper.doi !== "未记录") {
+      return `work:doi:${paper.doi}`;
+    }
+    return `work:zotero:${paper.key || "unknown"}`;
+  }
+
+  function createStableTimestamp(value) {
+    return value.replace(/[^0-9A-Za-z]+/g, "-").replace(/-$/, "");
+  }
+
+  function formatLocalTime(value) {
+    try {
+      return new Date(value).toLocaleString("zh-CN", { hour12: false });
+    } catch (_error) {
+      return value;
+    }
+  }
+
   function init() {
     getField("refresh-paper-context").addEventListener("click", refreshSelectedPaper);
     getField("summarize-selected-paper").addEventListener("click", summarizeSelectedPaper);
@@ -293,10 +418,13 @@
   window.WorkbenchPaperSummary = {
     buildChinesePaperSummaryPrompt,
     buildSummaryCopyText,
+    createSummaryDraftInput,
     copyGeneratedResult,
+    loadWorkbenchSnapshot,
     normalizePaperContext,
     parseChatCompletionText,
     readSelectedPaperContext,
-    requestPaperSummary
+    requestPaperSummary,
+    saveSummaryDraft
   };
 })();

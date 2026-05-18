@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   buildChinesePaperSummaryPrompt,
   buildSummaryCopyText,
+  createSummaryDraftInput,
   normalizePaperContext,
   parseChatCompletionText,
   requestPaperSummary
@@ -144,4 +145,43 @@ test("buildSummaryCopyText formats selected paper metadata and generated result"
       "研究问题：示例问题\n主要发现：示例发现"
     ].join("\n")
   );
+});
+
+test("createSummaryDraftInput maps generated summary into research note draft input", () => {
+  const draftInput = createSummaryDraftInput({
+    paper: {
+      key: "ABCD1234",
+      title: "Metformin and gut microbiota in PCOS",
+      authors: "Li Wang",
+      year: "2026",
+      publicationTitle: "Journal of Endocrine Research",
+      doi: "10.1000/pcos.2026"
+    },
+    summary: "研究问题：示例问题\n主要发现：示例发现",
+    model: "moonshot-v1",
+    createdAt: "2026-05-18T12:00:00.000Z"
+  });
+
+  assert.deepEqual(draftInput, {
+    id: "draft-ABCD1234-2026-05-18T12-00-00-000Z",
+    zoteroItemKey: "ABCD1234",
+    workId: "work:doi:10.1000/pcos.2026",
+    title: "Metformin and gut microbiota in PCOS - 中文总结",
+    content: "研究问题：示例问题\n主要发现：示例发现",
+    promptTaskTemplateId: "single-paper-chinese-summary",
+    llmProviderId: "moonshot-v1",
+    inputContext: {
+      title: "Metformin and gut microbiota in PCOS",
+      authors: "Li Wang",
+      year: "2026",
+      publicationTitle: "Journal of Endocrine Research",
+      doi: "10.1000/pcos.2026"
+    },
+    createdAt: "2026-05-18T12:00:00.000Z",
+    provenance: {
+      source: "zotero-selection",
+      model: "moonshot-v1",
+      writeTarget: "local-draft-only"
+    }
+  });
 });

@@ -30,6 +30,8 @@ test("research panel exposes Chinese LLM provider settings", () => {
     "总结选中文献",
     "生成结果",
     "复制结果",
+    "草稿状态",
+    "当前结果尚未保存",
     "全局入口",
     "LLM 服务商设置",
     "接口地址",
