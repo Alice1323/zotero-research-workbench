@@ -204,7 +204,7 @@ test("connection test can pass when /models endpoint is unsupported but chat suc
   assert.deepEqual(result, { ok: true, message: "连接成功（模型列表不可用，已通过实际请求验证）" });
 });
 
-test("connection test does not report success when provider accepts an impossible sentinel model", async () => {
+test("connection test warns instead of failing when provider accepts an impossible sentinel model", async () => {
   const result = await testOpenAICompatibleConnection(
     {
       baseUrl: "https://api.example.test/v1",
@@ -230,7 +230,8 @@ test("connection test does not report success when provider accepts an impossibl
   );
 
   assert.deepEqual(result, {
-    ok: false,
-    message: "无法验证模型名称：接口接受了不存在的模型，请检查模型名称"
+    ok: true,
+    warning: true,
+    message: "连接可用，但接口未校验模型名称，请确认模型名称已填写正确"
   });
 });

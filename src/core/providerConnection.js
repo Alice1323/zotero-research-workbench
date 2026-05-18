@@ -39,6 +39,9 @@ async function testOpenAICompatibleConnection(settings, options = {}) {
         if (!probeCheck.ok) {
           return probeCheck;
         }
+        if (probeCheck.warning) {
+          return probeCheck;
+        }
       }
       return {
         ok: true,
@@ -130,8 +133,9 @@ async function verifyImpossibleModelIsRejected({ baseUrl, apiKey, fetchImpl, sig
 
   if (response.ok) {
     return {
-      ok: false,
-      message: "无法验证模型名称：接口接受了不存在的模型，请检查模型名称"
+      ok: true,
+      warning: true,
+      message: "连接可用，但接口未校验模型名称，请确认模型名称已填写正确"
     };
   }
   if (response.status === 401 || response.status === 403) {
