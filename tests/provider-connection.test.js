@@ -14,6 +14,13 @@ test("connection test sends minimal OpenAI-compatible request and returns Chines
     {
       fetch: async (url, options) => {
         calls.push({ url, options });
+        if (url.endsWith("/models")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ data: [{ id: "moonshot-v1" }] })
+          };
+        }
         return {
           ok: true,
           status: 200,
@@ -24,10 +31,13 @@ test("connection test sends minimal OpenAI-compatible request and returns Chines
   );
 
   assert.deepEqual(result, { ok: true, message: "连接成功" });
-  assert.equal(calls[0].url, "https://api.example.test/v1/chat/completions");
-  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[0].url, "https://api.example.test/v1/models");
+  assert.equal(calls[0].options.method, "GET");
   assert.equal(calls[0].options.headers.Authorization, "Bearer sk-secret");
-  assert.equal(JSON.parse(calls[0].options.body).model, "moonshot-v1");
+  assert.equal(calls[1].url, "https://api.example.test/v1/chat/completions");
+  assert.equal(calls[1].options.method, "POST");
+  assert.equal(calls[1].options.headers.Authorization, "Bearer sk-secret");
+  assert.equal(JSON.parse(calls[1].options.body).model, "moonshot-v1");
 });
 
 test("connection test requires API key without echoing it", async () => {
@@ -54,7 +64,7 @@ test("connection test maps auth, model, network, and timeout failures to Chinese
       { baseUrl: "https://api.example.test/v1", apiKey: "sk-secret", model: "bad-model" },
       { fetch: async () => ({ ok: false, status: 404, text: async () => "model not found" }) }
     ),
-    { ok: false, message: "模型不可用或接口路径不兼容" }
+    { ok: false, message: "模型列表读取失败（HTTP 404）" }
   );
 
   assert.deepEqual(
@@ -81,5 +91,41 @@ test("connection test maps auth, model, network, and timeout failures to Chinese
       }
     ),
     { ok: false, message: "请求超时" }
+  );
+});
+
+test("connection test rejects model names not returned by /models even if chat would accept them", async () => {
+  const calls = [];
+  const result = await testOpenAICompatibleConnection(
+    {
+      baseUrl: "https://api.example.test/v1",
+      apiKey: "sk-secret",
+      model: "definitely-not-a-real-model"
+    },
+    {
+      fetch: async (url, options) => {
+        calls.push({ url, options });
+        if (url.endsWith("/models")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              data: [{ id: "moonshot-v1" }, { id: "deepseek-chat" }]
+            })
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ choices: [{ message: { content: "ok" } }] })
+        };
+      }
+    }
+  );
+
+  assert.deepEqual(result, { ok: false, message: "模型不可用" });
+  assert.deepEqual(
+    calls.map((call) => call.url),
+    ["https://api.example.test/v1/models"]
   );
 });

@@ -21,6 +21,11 @@ async function testOpenAICompatibleConnection(settings, options = {}) {
     : null;
 
   try {
+    const modelCheck = await verifyModelIsAvailable({ baseUrl, apiKey, model, fetchImpl, signal: controller?.signal });
+    if (!modelCheck.ok) {
+      return modelCheck;
+    }
+
     const response = await fetchImpl(buildChatCompletionsUrl(baseUrl), {
       method: "POST",
       headers: {
@@ -65,7 +70,38 @@ function buildChatCompletionsUrl(baseUrl) {
   return `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
 }
 
+function buildModelsUrl(baseUrl) {
+  return `${baseUrl.replace(/\/+$/, "")}/models`;
+}
+
+async function verifyModelIsAvailable({ baseUrl, apiKey, model, fetchImpl, signal }) {
+  const response = await fetchImpl(buildModelsUrl(baseUrl), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${apiKey}`
+    },
+    signal
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    return { ok: false, message: "API 密钥无效" };
+  }
+  if (!response.ok) {
+    return { ok: false, message: `模型列表读取失败（HTTP ${response.status}）` };
+  }
+
+  const body = await response.json();
+  const modelIds = Array.isArray(body.data)
+    ? body.data.map((entry) => entry && entry.id).filter(Boolean)
+    : [];
+  if (!modelIds.includes(model)) {
+    return { ok: false, message: "模型不可用" };
+  }
+  return { ok: true, message: "模型可用" };
+}
+
 module.exports = {
   buildChatCompletionsUrl,
+  buildModelsUrl,
   testOpenAICompatibleConnection
 };
