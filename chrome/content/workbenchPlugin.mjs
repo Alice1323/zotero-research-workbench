@@ -8,6 +8,7 @@ export class WorkbenchPlugin {
   }
 
   async startup() {
+    this.setDebugPref("lastStartup", new Date().toISOString());
     this.log("Starting Zotero Research Workbench");
     for (const win of this.getMainWindows()) {
       this.addToWindow(win);
@@ -18,6 +19,7 @@ export class WorkbenchPlugin {
     for (const win of this.getMainWindows()) {
       this.removeFromWindow(win);
     }
+    this.setDebugPref("lastShutdown", new Date().toISOString());
     this.log("Stopped Zotero Research Workbench");
   }
 
@@ -75,6 +77,12 @@ export class WorkbenchPlugin {
   log(message) {
     if (this.Zotero && this.Zotero.debug) {
       this.Zotero.debug(`[Research Workbench] ${message}`);
+    }
+  }
+
+  setDebugPref(name, value) {
+    if (this.Zotero && this.Zotero.Prefs && this.Zotero.Prefs.set) {
+      this.Zotero.Prefs.set(`extensions.zotero-research-workbench.${name}`, value);
     }
   }
 }

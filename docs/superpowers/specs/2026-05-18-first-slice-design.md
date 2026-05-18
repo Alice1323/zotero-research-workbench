@@ -19,6 +19,8 @@ It focuses on the smallest useful vertical path:
 
 The Zotero-facing layer is intentionally thin. `bootstrap.js` registers `chrome/content/` at runtime, imports `chrome/content/workbenchPlugin.mjs`, and uses main-window hooks to add or remove a tools-menu command that opens `chrome/content/researchPanel.xhtml`.
 
+The Zotero-facing layer also writes a debug startup preference so smoke tests can prove that the bootstrap path executed without depending on brittle UI automation.
+
 The testable product behavior lives in `src/core/index.js`. It is plain CommonJS so Node can verify provider contracts, prompt templates, local store behavior, and export redaction without launching Zotero.
 
 ## Deferred
@@ -31,3 +33,9 @@ This slice does not perform real LLM network requests, write Zotero notes, parse
 - 苍星石: the core is separated from Zotero UI so behavior can be tested without a running Zotero profile.
 - 雏莓: the happy path is simple: create provider, render prompt, create draft, record task, capture seed, export, import.
 - 真红: the slice is narrow enough to ship as a foundation without pretending to be the full first release.
+
+## Smoke Test Result
+
+Zotero `9.0.3` recognizes the generated XPI. Dropping the XPI directly into a profile registers it as a sideloaded extension with `foreignInstall: True` and `userDisabled: True`, so active-profile installation should be done through the official Plugins UI or an explicit development profile setup.
+
+In an isolated temporary profile, enabling the add-on changed it to `active: True`, `userDisabled: False`, `appDisabled: False`, and startup wrote `extensions.zotero.extensions.zotero-research-workbench.lastStartup`.

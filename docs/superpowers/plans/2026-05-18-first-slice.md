@@ -88,3 +88,34 @@ npm run check
 ```
 
 Expected: exit code `0` for both commands.
+
+### Task 4: Zotero Smoke Test
+
+**Files:**
+- Modify: `chrome/content/workbenchPlugin.mjs`
+- Modify: `README.md`
+- Modify: `docs/superpowers/specs/2026-05-18-first-slice-design.md`
+
+- [x] **Step 1: Add startup probe**
+
+Write `extensions.zotero-research-workbench.lastStartup` from `WorkbenchPlugin.startup()` so a profile can prove the bootstrap hook executed.
+
+- [x] **Step 2: Build and install into an isolated profile**
+
+Run:
+
+```powershell
+npm test
+npm run check
+npm run package
+```
+
+Copy the generated XPI into an isolated profile extensions directory and start Zotero 9.0.3 with `-profile <path> -no-remote`.
+
+- [x] **Step 3: Verify extension-manager behavior**
+
+Expected after dropped-in sideload: Zotero recognizes `zotero-research-workbench@local`, but marks it `foreignInstall: True` and `userDisabled: True`.
+
+- [x] **Step 4: Verify enabled smoke profile**
+
+Expected after explicitly enabling in the isolated profile: `active: True`, `userDisabled: False`, `appDisabled: False`, and `prefs.js` contains `extensions.zotero.extensions.zotero-research-workbench.lastStartup`.

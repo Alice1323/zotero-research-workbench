@@ -36,6 +36,28 @@ npm run package
 
 The package command writes `dist/zotero-research-workbench-0.1.0.xpi`.
 
+## Zotero Smoke Test
+
+The XPI has been verified against Zotero `9.0.3` in an isolated temporary profile.
+
+Manual or UI installation is still required for the active Zotero profile because Zotero marks dropped-in sideloaded XPI files as `foreignInstall` and `userDisabled` by default. In an isolated smoke profile, enabling the add-on produced:
+
+```text
+id: zotero-research-workbench@local
+version: 0.1.0
+active: True
+userDisabled: False
+appDisabled: False
+```
+
+The plugin startup hook writes a debug preference:
+
+```text
+extensions.zotero.extensions.zotero-research-workbench.lastStartup
+```
+
+Seeing that preference in the profile confirms that `bootstrap.js` loaded and `WorkbenchPlugin.startup()` ran.
+
 ## Boundaries
 
 The project does not support Zotero 7. It does not ship a full Citation Graph UI, Visual Workflow Builder, batch processing UI, Sci-Hub provider, Google Scholar scraping, arbitrary user scripts, or live cloud sync.
