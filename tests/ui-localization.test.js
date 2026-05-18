@@ -32,6 +32,8 @@ test("research panel exposes Chinese LLM provider settings", () => {
     "复制结果",
     "草稿状态",
     "当前结果尚未保存",
+    "最近草稿",
+    "暂无草稿",
     "全局入口",
     "LLM 服务商设置",
     "接口地址",
@@ -45,6 +47,7 @@ test("research panel exposes Chinese LLM provider settings", () => {
 
   assert.match(panel, /type="password"/);
   assert.match(panel, /class="result-header"/);
+  assert.match(panel, /id="recent-drafts-list"/);
   assert.match(panel, /align-items:\s*center/);
   assert.doesNotMatch(panel, /Current item actions will appear here/);
   assert.doesNotMatch(panel, /Global Entry Point/);

@@ -5,6 +5,7 @@ const {
   buildChinesePaperSummaryPrompt,
   buildSummaryCopyText,
   createSummaryDraftInput,
+  listRecentSummaryDrafts,
   normalizePaperContext,
   parseChatCompletionText,
   requestPaperSummary
@@ -184,4 +185,94 @@ test("createSummaryDraftInput maps generated summary into research note draft in
       writeTarget: "local-draft-only"
     }
   });
+});
+
+test("listRecentSummaryDrafts returns summary drafts newest first", () => {
+  const drafts = listRecentSummaryDrafts({
+    researchNoteDrafts: [
+      {
+        id: "old-summary",
+        title: "旧草稿",
+        content: "旧内容",
+        createdAt: "2026-05-18T08:00:00.000Z",
+        llmProviderId: "model-a",
+        confirmationState: "draft",
+        promptTaskTemplateId: "single-paper-chinese-summary"
+      },
+      {
+        id: "confirmed-summary",
+        title: "已确认",
+        content: "不应显示",
+        createdAt: "2026-05-18T10:00:00.000Z",
+        llmProviderId: "model-a",
+        confirmationState: "confirmed",
+        promptTaskTemplateId: "single-paper-chinese-summary"
+      },
+      {
+        id: "other-template",
+        title: "其他模板",
+        content: "不应显示",
+        createdAt: "2026-05-18T11:00:00.000Z",
+        llmProviderId: "model-a",
+        confirmationState: "draft",
+        promptTaskTemplateId: "other-template"
+      },
+      {
+        id: "new-summary",
+        title: "新草稿",
+        content: "新内容",
+        createdAt: "2026-05-18T12:00:00.000Z",
+        llmProviderId: "model-b",
+        confirmationState: "draft",
+        promptTaskTemplateId: "single-paper-chinese-summary"
+      }
+    ]
+  });
+
+  assert.deepEqual(drafts, [
+    {
+      id: "new-summary",
+      title: "新草稿",
+      content: "新内容",
+      createdAt: "2026-05-18T12:00:00.000Z",
+      model: "model-b"
+    },
+    {
+      id: "old-summary",
+      title: "旧草稿",
+      content: "旧内容",
+      createdAt: "2026-05-18T08:00:00.000Z",
+      model: "model-a"
+    }
+  ]);
+});
+
+test("listRecentSummaryDrafts limits visible drafts", () => {
+  const drafts = listRecentSummaryDrafts(
+    {
+      researchNoteDrafts: [
+        {
+          id: "draft-1",
+          title: "草稿 1",
+          content: "内容 1",
+          createdAt: "2026-05-18T08:00:00.000Z",
+          llmProviderId: "model-a",
+          confirmationState: "draft",
+          promptTaskTemplateId: "single-paper-chinese-summary"
+        },
+        {
+          id: "draft-2",
+          title: "草稿 2",
+          content: "内容 2",
+          createdAt: "2026-05-18T09:00:00.000Z",
+          llmProviderId: "model-b",
+          confirmationState: "draft",
+          promptTaskTemplateId: "single-paper-chinese-summary"
+        }
+      ]
+    },
+    1
+  );
+
+  assert.deepEqual(drafts.map((draft) => draft.id), ["draft-2"]);
 });

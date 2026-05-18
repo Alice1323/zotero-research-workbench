@@ -74,6 +74,7 @@
       const draft = saveSummaryDraft({ paper, summary, model: settings.model });
       status.textContent = "总结已生成";
       renderDraftStatus(draft);
+      renderRecentDrafts();
     } catch (error) {
       status.textContent = error?.message || "总结生成失败";
     }
@@ -197,6 +198,51 @@
       : "当前结果尚未保存";
   }
 
+  function renderRecentDrafts() {
+    const list = getField("recent-drafts-list");
+    if (!list) {
+      return;
+    }
+
+    const drafts = listRecentSummaryDrafts(loadWorkbenchSnapshot());
+    list.textContent = "";
+
+    if (!drafts.length) {
+      const empty = document.createElement("span");
+      empty.className = "status";
+      empty.textContent = "暂无草稿";
+      list.appendChild(empty);
+      return;
+    }
+
+    for (const draft of drafts) {
+      const button = document.createElement("button");
+      button.className = "draft-button";
+      button.type = "button";
+      button.addEventListener("click", () => loadRecentDraft(draft));
+
+      const title = document.createElement("span");
+      title.className = "draft-title";
+      title.textContent = draft.title || "未命名草稿";
+
+      const meta = document.createElement("span");
+      meta.className = "draft-meta";
+      meta.textContent = `${formatLocalTime(draft.createdAt)}${draft.model ? `｜${draft.model}` : ""}`;
+
+      button.appendChild(title);
+      button.appendChild(meta);
+      list.appendChild(button);
+    }
+  }
+
+  function loadRecentDraft(draft) {
+    getField("paper-summary-output").textContent = draft.content || "";
+    getField("paper-summary-status").textContent = "已载入最近草稿";
+    getField("paper-draft-status").textContent = `已载入草稿（${formatLocalTime(draft.createdAt)}）`;
+    window.WorkbenchLastSummary = draft.content || "";
+    window.WorkbenchLastDraft = draft;
+  }
+
   async function requestPaperSummary({ paper, settings, fetchImpl }) {
     const response = await fetchImpl(`${settings.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
       method: "POST",
@@ -312,6 +358,26 @@
     };
   }
 
+  function listRecentSummaryDrafts(snapshot, limit = 5) {
+    const maxItems = Number.isInteger(limit) && limit > 0 ? limit : 5;
+    return (Array.isArray(snapshot?.researchNoteDrafts) ? snapshot.researchNoteDrafts : [])
+      .filter(
+        (draft) =>
+          draft?.confirmationState === "draft" &&
+          draft?.promptTaskTemplateId === "single-paper-chinese-summary"
+      )
+      .slice()
+      .sort((left, right) => Date.parse(right.createdAt || "") - Date.parse(left.createdAt || ""))
+      .slice(0, maxItems)
+      .map((draft) => ({
+        id: cleanText(draft.id),
+        title: cleanText(draft.title),
+        content: cleanText(draft.content),
+        createdAt: cleanText(draft.createdAt),
+        model: cleanText(draft.llmProviderId)
+      }));
+  }
+
   async function writeClipboardText(text) {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -406,6 +472,7 @@
     getField("refresh-paper-context").addEventListener("click", refreshSelectedPaper);
     getField("summarize-selected-paper").addEventListener("click", summarizeSelectedPaper);
     getField("copy-paper-summary").addEventListener("click", copyGeneratedResult);
+    renderRecentDrafts();
     refreshSelectedPaper();
   }
 
@@ -420,10 +487,13 @@
     buildSummaryCopyText,
     createSummaryDraftInput,
     copyGeneratedResult,
+    listRecentSummaryDrafts,
     loadWorkbenchSnapshot,
+    loadRecentDraft,
     normalizePaperContext,
     parseChatCompletionText,
     readSelectedPaperContext,
+    renderRecentDrafts,
     requestPaperSummary,
     saveSummaryDraft
   };

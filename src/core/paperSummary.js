@@ -87,6 +87,26 @@ function createSummaryDraftInput({ paper, summary, model, createdAt }) {
   };
 }
 
+function listRecentSummaryDrafts(snapshot, limit = 5) {
+  const maxItems = Number.isInteger(limit) && limit > 0 ? limit : 5;
+  return (Array.isArray(snapshot?.researchNoteDrafts) ? snapshot.researchNoteDrafts : [])
+    .filter(
+      (draft) =>
+        draft?.confirmationState === "draft" &&
+        draft?.promptTaskTemplateId === "single-paper-chinese-summary"
+    )
+    .slice()
+    .sort((left, right) => Date.parse(right.createdAt || "") - Date.parse(left.createdAt || ""))
+    .slice(0, maxItems)
+    .map((draft) => ({
+      id: cleanText(draft.id),
+      title: cleanText(draft.title),
+      content: cleanText(draft.content),
+      createdAt: cleanText(draft.createdAt),
+      model: cleanText(draft.llmProviderId)
+    }));
+}
+
 async function requestPaperSummary({ paper, settings, fetchImpl }) {
   const response = await fetchImpl(`${settings.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
     method: "POST",
@@ -180,6 +200,7 @@ module.exports = {
   buildChinesePaperSummaryPrompt,
   buildSummaryCopyText,
   createSummaryDraftInput,
+  listRecentSummaryDrafts,
   normalizePaperContext,
   parseChatCompletionText,
   requestPaperSummary
