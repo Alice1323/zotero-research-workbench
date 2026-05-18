@@ -20,15 +20,15 @@
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const modelCheck = await verifyModelIsAvailable({
+      const modelCheck = await inspectModelList({
         baseUrl,
         apiKey,
         model,
         fetchImpl,
         signal: controller.signal
       });
-      if (!modelCheck.ok) {
-        return modelCheck;
+      if (modelCheck.fatal) {
+        return { ok: false, message: modelCheck.message };
       }
 
       const response = await fetchImpl(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
@@ -47,16 +47,20 @@
       });
 
       if (response.ok) {
-        return { ok: true, message: "连接成功" };
+        return {
+          ok: true,
+          message: modelCheck.listAvailable ? "连接成功" : "连接成功（模型列表不可用，已通过实际请求验证）"
+        };
       }
       if (response.status === 401 || response.status === 403) {
         return { ok: false, message: "API 密钥无效" };
       }
-      if (response.status === 404) {
-        return { ok: false, message: "模型不可用或接口路径不兼容" };
-      }
       if (response.status === 408 || response.status === 504) {
         return { ok: false, message: "请求超时" };
+      }
+      const bodyText = await readResponseText(response);
+      if (isModelErrorResponse(response.status, bodyText)) {
+        return { ok: false, message: "模型不可用" };
       }
       return { ok: false, message: `连接失败（HTTP ${response.status}）` };
     } catch (error) {
@@ -69,7 +73,7 @@
     }
   }
 
-  async function verifyModelIsAvailable({ baseUrl, apiKey, model, fetchImpl, signal }) {
+  async function inspectModelList({ baseUrl, apiKey, model, fetchImpl, signal }) {
     const response = await fetchImpl(`${baseUrl.replace(/\/+$/, "")}/models`, {
       method: "GET",
       headers: {
@@ -79,20 +83,59 @@
     });
 
     if (response.status === 401 || response.status === 403) {
-      return { ok: false, message: "API 密钥无效" };
+      return { fatal: true, message: "API 密钥无效" };
     }
     if (!response.ok) {
-      return { ok: false, message: `模型列表读取失败（HTTP ${response.status}）` };
+      return { fatal: false, listAvailable: false };
     }
 
-    const body = await response.json();
+    const body = await readResponseJson(response);
+    if (!body) {
+      return { fatal: false, listAvailable: false };
+    }
     const modelIds = Array.isArray(body.data)
       ? body.data.map((entry) => entry && entry.id).filter(Boolean)
       : [];
-    if (!modelIds.includes(model)) {
-      return { ok: false, message: "模型不可用" };
+    return { fatal: false, listAvailable: true, modelListed: modelIds.includes(model) };
+  }
+
+  async function readResponseJson(response) {
+    try {
+      return await response.json();
+    } catch (_error) {
+      return null;
     }
-    return { ok: true, message: "模型可用" };
+  }
+
+  async function readResponseText(response) {
+    try {
+      return await response.text();
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function isModelErrorResponse(status, bodyText) {
+    if (![400, 404, 422].includes(status)) {
+      return false;
+    }
+    const text = String(bodyText || "").toLowerCase();
+    const mentionsModel = text.includes("model") || text.includes("模型");
+    const saysUnavailable = [
+      "not found",
+      "does not exist",
+      "not exist",
+      "invalid",
+      "unknown",
+      "unsupported",
+      "not supported",
+      "不存在",
+      "未找到",
+      "不可用",
+      "无效",
+      "不支持"
+    ].some((marker) => text.includes(marker));
+    return mentionsModel && saysUnavailable;
   }
 
   window.WorkbenchProviderConnection = {

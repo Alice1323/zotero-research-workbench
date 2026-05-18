@@ -64,7 +64,7 @@ test("connection test maps auth, model, network, and timeout failures to Chinese
       { baseUrl: "https://api.example.test/v1", apiKey: "sk-secret", model: "bad-model" },
       { fetch: async () => ({ ok: false, status: 404, text: async () => "model not found" }) }
     ),
-    { ok: false, message: "模型列表读取失败（HTTP 404）" }
+    { ok: false, message: "模型不可用" }
   );
 
   assert.deepEqual(
@@ -94,13 +94,13 @@ test("connection test maps auth, model, network, and timeout failures to Chinese
   );
 });
 
-test("connection test rejects model names not returned by /models even if chat would accept them", async () => {
+test("connection test accepts detectable model when /models omits alias but chat succeeds", async () => {
   const calls = [];
   const result = await testOpenAICompatibleConnection(
     {
       baseUrl: "https://api.example.test/v1",
       apiKey: "sk-secret",
-      model: "definitely-not-a-real-model"
+      model: "provider-alias-model"
     },
     {
       fetch: async (url, options) => {
@@ -123,9 +123,61 @@ test("connection test rejects model names not returned by /models even if chat w
     }
   );
 
-  assert.deepEqual(result, { ok: false, message: "模型不可用" });
+  assert.deepEqual(result, { ok: true, message: "连接成功" });
   assert.deepEqual(
     calls.map((call) => call.url),
-    ["https://api.example.test/v1/models"]
+    ["https://api.example.test/v1/models", "https://api.example.test/v1/chat/completions"]
   );
+});
+
+test("connection test rejects model when chat response explicitly reports model error", async () => {
+  const result = await testOpenAICompatibleConnection(
+    {
+      baseUrl: "https://api.example.test/v1",
+      apiKey: "sk-secret",
+      model: "definitely-not-a-real-model"
+    },
+    {
+      fetch: async (url) => {
+        if (url.endsWith("/models")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ data: [{ id: "moonshot-v1" }] })
+          };
+        }
+        return {
+          ok: false,
+          status: 400,
+          text: async () => "model definitely-not-a-real-model not found"
+        };
+      }
+    }
+  );
+
+  assert.deepEqual(result, { ok: false, message: "模型不可用" });
+});
+
+test("connection test can pass when /models endpoint is unsupported but chat succeeds", async () => {
+  const result = await testOpenAICompatibleConnection(
+    {
+      baseUrl: "https://api.example.test/v1",
+      apiKey: "sk-secret",
+      model: "chat-only-model"
+    },
+    {
+      fetch: async (url) => {
+        if (url.endsWith("/models")) {
+          return { ok: false, status: 404, text: async () => "not found" };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ choices: [{ message: { content: "ok" } }] })
+        };
+      }
+    }
+  );
+
+  assert.deepEqual(result, { ok: true, message: "连接成功（模型列表不可用，已通过实际请求验证）" });
 });
