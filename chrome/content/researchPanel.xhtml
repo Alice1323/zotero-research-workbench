@@ -67,6 +67,23 @@
         line-height: 1.5;
       }
 
+      .result-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-block: 4px 8px;
+      }
+
+      .result-header strong {
+        line-height: 28px;
+      }
+
+      .result-header button {
+        min-height: 28px;
+        padding-inline: 10px;
+      }
+
       .field-grid {
         display: grid;
         gap: 8px;
@@ -109,7 +126,7 @@
           <button id="summarize-selected-paper" type="button">总结选中文献</button>
         </div>
         <p id="paper-summary-status" class="status" aria-live="polite"></p>
-        <div class="actions">
+        <div class="result-header">
           <strong>生成结果</strong>
           <button id="copy-paper-summary" type="button">复制结果</button>
         </div>

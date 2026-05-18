@@ -42,6 +42,8 @@ test("research panel exposes Chinese LLM provider settings", () => {
   }
 
   assert.match(panel, /type="password"/);
+  assert.match(panel, /class="result-header"/);
+  assert.match(panel, /align-items:\s*center/);
   assert.doesNotMatch(panel, /Current item actions will appear here/);
   assert.doesNotMatch(panel, /Global Entry Point/);
 });
