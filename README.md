@@ -21,7 +21,7 @@ The first implementation slice contains:
 
 - Zotero plugin metadata and startup hooks;
 - a Chinese Research Panel placeholder view;
-- a static Chinese LLM Provider settings section;
+- a Chinese LLM Provider settings section that saves to Zotero preferences;
 - provider configuration redaction;
 - in-memory Workbench Local Store;
 - prompt task template rendering with a safe variable whitelist;
@@ -60,6 +60,16 @@ extensions.zotero.extensions.zotero-research-workbench.lastStartup
 ```
 
 Seeing that preference in the profile confirms that `bootstrap.js` loaded and `WorkbenchPlugin.startup()` ran.
+
+## Provider Settings Behavior
+
+The panel saves these values to Zotero preferences:
+
+- `extensions.zotero-research-workbench.provider.baseUrl`
+- `extensions.zotero-research-workbench.provider.apiKey`
+- `extensions.zotero-research-workbench.provider.model`
+
+After saving, the panel shows `设置已保存`. When reopened, it reloads `接口地址` and `模型名称`; the API key field stays blank and shows `已保存，留空则保持不变`.
 
 ## Boundaries
 

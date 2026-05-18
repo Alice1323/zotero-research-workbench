@@ -20,6 +20,7 @@ Copy-Item -LiteralPath (Join-Path $projectRoot "manifest.json") -Destination $pa
 Copy-Item -LiteralPath (Join-Path $projectRoot "bootstrap.js") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $projectRoot "chrome/content/researchPanel.xhtml") -Destination (Join-Path $packageDir "chrome/content")
 Copy-Item -LiteralPath (Join-Path $projectRoot "chrome/content/workbenchPlugin.mjs") -Destination (Join-Path $packageDir "chrome/content")
+Copy-Item -LiteralPath (Join-Path $projectRoot "chrome/content/providerSettings.js") -Destination (Join-Path $packageDir "chrome/content")
 
 if (Test-Path $xpiPath) {
   Remove-Item -LiteralPath $xpiPath -Force
