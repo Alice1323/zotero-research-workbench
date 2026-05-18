@@ -120,7 +120,7 @@
       throw new Error(`总结生成失败（HTTP ${response.status}）`);
     }
 
-    return parseChatCompletionText(await response.json());
+    return parseChatCompletionText(parseJsonResponseText(await readResponseText(response)));
   }
 
   function normalizePaperContext(input) {
@@ -166,6 +166,28 @@
       throw new Error("LLM 响应为空");
     }
     return text.trim();
+  }
+
+  async function readResponseText(response) {
+    if (typeof response.text === "function") {
+      return response.text();
+    }
+    if (typeof response.json === "function") {
+      try {
+        return JSON.stringify(await response.json());
+      } catch (_error) {
+        return "";
+      }
+    }
+    return "";
+  }
+
+  function parseJsonResponseText(text) {
+    try {
+      return JSON.parse(text);
+    } catch (_error) {
+      throw new Error("LLM 服务返回了无法解析的响应，请检查接口地址是否为 OpenAI 兼容地址");
+    }
   }
 
   function formatCreators(creators) {

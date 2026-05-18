@@ -4,7 +4,8 @@ const assert = require("node:assert/strict");
 const {
   buildChinesePaperSummaryPrompt,
   normalizePaperContext,
-  parseChatCompletionText
+  parseChatCompletionText,
+  requestPaperSummary
 } = require("../src/core/paperSummary");
 
 test("normalizePaperContext formats Zotero item metadata without mutating source item", () => {
@@ -92,5 +93,25 @@ test("parseChatCompletionText extracts assistant text from OpenAI-compatible res
   assert.throws(
     () => parseChatCompletionText({ choices: [{ message: { content: "" } }] }),
     /LLM 响应为空/
+  );
+});
+
+test("requestPaperSummary reports Chinese error when provider returns non-JSON body", async () => {
+  await assert.rejects(
+    () =>
+      requestPaperSummary({
+        paper: { title: "Example", creators: [] },
+        settings: {
+          baseUrl: "https://api.example.test/v1",
+          apiKey: "sk-secret",
+          model: "model-a"
+        },
+        fetchImpl: async () => ({
+          ok: true,
+          status: 200,
+          text: async () => "<html>gateway error</html>"
+        })
+      }),
+    /LLM 服务返回了无法解析的响应/
   );
 });

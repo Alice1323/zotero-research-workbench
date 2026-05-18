@@ -44,6 +44,55 @@ function parseChatCompletionText(body) {
   return text.trim();
 }
 
+async function requestPaperSummary({ paper, settings, fetchImpl }) {
+  const response = await fetchImpl(`${settings.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${settings.apiKey}`
+    },
+    body: JSON.stringify({
+      model: settings.model,
+      messages: [{ role: "user", content: buildChinesePaperSummaryPrompt(paper) }],
+      temperature: 0.2
+    })
+  });
+
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("API 密钥无效");
+    }
+    if (response.status === 408 || response.status === 504) {
+      throw new Error("请求超时");
+    }
+    throw new Error(`总结生成失败（HTTP ${response.status}）`);
+  }
+
+  return parseChatCompletionText(parseJsonResponseText(await readResponseText(response)));
+}
+
+async function readResponseText(response) {
+  if (typeof response.text === "function") {
+    return response.text();
+  }
+  if (typeof response.json === "function") {
+    try {
+      return JSON.stringify(await response.json());
+    } catch (_error) {
+      return "";
+    }
+  }
+  return "";
+}
+
+function parseJsonResponseText(text) {
+  try {
+    return JSON.parse(text);
+  } catch (_error) {
+    throw new Error("LLM 服务返回了无法解析的响应，请检查接口地址是否为 OpenAI 兼容地址");
+  }
+}
+
 function formatCreators(creators) {
   if (!Array.isArray(creators) || creators.length === 0) {
     return "未记录";
@@ -76,5 +125,6 @@ function cleanText(value) {
 module.exports = {
   buildChinesePaperSummaryPrompt,
   normalizePaperContext,
-  parseChatCompletionText
+  parseChatCompletionText,
+  requestPaperSummary
 };
