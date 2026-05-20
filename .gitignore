@@ -1,4 +1,6 @@
 dist/*.xpi
+dist/*.json
+dist/*.zip
 dist/package/
 node_modules/
 tmp/

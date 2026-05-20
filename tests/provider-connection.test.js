@@ -204,6 +204,87 @@ test("connection test can pass when /models endpoint is unsupported but chat suc
   assert.deepEqual(result, { ok: true, message: "连接成功（模型列表不可用，已通过实际请求验证）" });
 });
 
+test("connection test rejects HTTP 200 responses without OpenAI chat completion content", async () => {
+  const result = await testOpenAICompatibleConnection(
+    {
+      baseUrl: "https://api.example.test/not-openai",
+      apiKey: "sk-secret",
+      model: "moonshot-v1"
+    },
+    {
+      fetch: async (url) => {
+        if (url.endsWith("/models")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ data: [{ id: "moonshot-v1" }] })
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ status: "ok", message: "not an OpenAI-compatible response" }),
+          text: async () => JSON.stringify({ status: "ok", message: "not an OpenAI-compatible response" })
+        };
+      }
+    }
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    message: "接口返回格式不是 OpenAI 兼容响应，请检查接口地址"
+  });
+});
+
+test("connection test uses timeout from provider settings when no option override is supplied", async () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let timeoutDelay = null;
+  let clearedHandle = null;
+
+  globalThis.setTimeout = (_callback, delay) => {
+    timeoutDelay = delay;
+    return "provider-timeout-handle";
+  };
+  globalThis.clearTimeout = (handle) => {
+    clearedHandle = handle;
+  };
+
+  try {
+    const result = await testOpenAICompatibleConnection(
+      {
+        baseUrl: "https://api.example.test/v1",
+        apiKey: "sk-secret",
+        model: "moonshot-v1",
+        timeoutMs: 42000
+      },
+      {
+        fetch: async (url) => {
+          if (url.endsWith("/models")) {
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({ data: [{ id: "moonshot-v1" }] })
+            };
+          }
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ choices: [{ message: { content: "ok" } }] })
+          };
+        }
+      }
+    );
+
+    assert.deepEqual(result, { ok: true, message: "连接成功" });
+    assert.equal(timeoutDelay, 42000);
+    assert.equal(clearedHandle, "provider-timeout-handle");
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
 test("connection test warns instead of failing when provider accepts an impossible sentinel model", async () => {
   const result = await testOpenAICompatibleConnection(
     {

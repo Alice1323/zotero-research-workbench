@@ -1,0 +1,399 @@
+{
+  "packageKind": "zotero-research-workbench-export",
+  "packageVersion": 1,
+  "exportedAt": "2026-05-20T11:24:00.000Z",
+  "snapshot": {
+    "schemaVersion": 1,
+    "exportedAt": "2026-05-20T11:24:00.000Z",
+    "providers": [
+      {
+        "id": "manual-qa-provider",
+        "capability": "llm",
+        "baseUrl": "https://example.invalid/v1",
+        "model": "manual-qa-model",
+        "apiKey": "<redacted>",
+        "headers": {
+          "Authorization": "<redacted>"
+        },
+        "provenance": {
+          "providerKind": "openai-compatible",
+          "configuredAt": "2026-05-20T11:00:00.000Z"
+        }
+      }
+    ],
+    "promptTemplates": [],
+    "promptOverrides": [
+      {
+        "templateId": "single-paper-chinese-summary",
+        "template": "请总结 {{itemTitle}} 和 {{abstract}}"
+      }
+    ],
+    "providerProvenance": [
+      {
+        "providerId": "manual-qa-provider",
+        "password": "<redacted>"
+      }
+    ],
+    "researchNoteDrafts": [
+      {
+        "id": "draft-shared-doi-a",
+        "zoteroItemKey": "QAITEM01",
+        "workId": "work:qa:shared-doi-a",
+        "title": "Shared DOI Work Alpha - 中文总结",
+        "content": "Manual QA draft for shared DOI alpha.",
+        "promptTaskTemplateId": "single-paper-chinese-summary",
+        "llmProviderId": "manual-qa-provider",
+        "inputContext": {
+          "title": "Shared DOI Work Alpha",
+          "doi": "10.5555/manual-shared-doi"
+        },
+        "createdAt": "2026-05-20T11:01:00.000Z",
+        "confirmationState": "draft",
+        "provenance": {
+          "fixture": "zrw-manual-qa"
+        }
+      },
+      {
+        "id": "draft-shared-doi-b",
+        "zoteroItemKey": "QAITEM02",
+        "workId": "work:qa:shared-doi-b",
+        "title": "Shared DOI Work Beta - 中文总结",
+        "content": "Manual QA draft for shared DOI beta.",
+        "promptTaskTemplateId": "single-paper-chinese-summary",
+        "llmProviderId": "manual-qa-provider",
+        "inputContext": {
+          "title": "Shared DOI Work Beta",
+          "doi": "10.5555/manual-shared-doi"
+        },
+        "createdAt": "2026-05-20T11:02:00.000Z",
+        "confirmationState": "draft",
+        "provenance": {
+          "fixture": "zrw-manual-qa"
+        }
+      },
+      {
+        "id": "draft-shared-key-a",
+        "zoteroItemKey": "QAKEYSHR",
+        "workId": "work:qa:shared-key-a",
+        "title": "Shared Key Work Alpha",
+        "content": "Manual QA draft for shared Zotero key alpha.",
+        "promptTaskTemplateId": "single-paper-chinese-summary",
+        "llmProviderId": "manual-qa-provider",
+        "inputContext": {
+          "title": "Shared Key Work Alpha",
+          "doi": "10.5555/manual-key-alpha"
+        },
+        "createdAt": "2026-05-20T11:03:00.000Z",
+        "confirmationState": "draft",
+        "provenance": {
+          "fixture": "zrw-manual-qa"
+        }
+      },
+      {
+        "id": "draft-shared-key-b",
+        "zoteroItemKey": "QAKEYSHR",
+        "workId": "work:qa:shared-key-b",
+        "title": "Shared Key Work Beta",
+        "content": "Manual QA draft for shared Zotero key beta.",
+        "promptTaskTemplateId": "single-paper-chinese-summary",
+        "llmProviderId": "manual-qa-provider",
+        "inputContext": {
+          "title": "Shared Key Work Beta",
+          "doi": "10.5555/manual-key-beta"
+        },
+        "createdAt": "2026-05-20T11:04:00.000Z",
+        "confirmationState": "draft",
+        "provenance": {
+          "fixture": "zrw-manual-qa"
+        }
+      },
+      {
+        "id": "draft-title-a",
+        "zoteroItemKey": "QATITLEA",
+        "workId": "work:qa:title-a",
+        "title": "A Manual QA Similar Title",
+        "content": "Manual QA draft for similar title A.",
+        "promptTaskTemplateId": "single-paper-chinese-summary",
+        "llmProviderId": "manual-qa-provider",
+        "inputContext": {
+          "title": "A Manual QA Similar Title",
+          "doi": "10.5555/manual-title-a"
+        },
+        "createdAt": "2026-05-20T11:05:00.000Z",
+        "confirmationState": "draft",
+        "provenance": {
+          "fixture": "zrw-manual-qa"
+        }
+      },
+      {
+        "id": "draft-title-b",
+        "zoteroItemKey": "QATITLEB",
+        "workId": "work:qa:title-b",
+        "title": "A Manual QA Similar Title",
+        "content": "Manual QA draft for similar title B.",
+        "promptTaskTemplateId": "single-paper-chinese-summary",
+        "llmProviderId": "manual-qa-provider",
+        "inputContext": {
+          "title": "A Manual QA Similar Title",
+          "doi": "10.5555/manual-title-b"
+        },
+        "createdAt": "2026-05-20T11:06:00.000Z",
+        "confirmationState": "draft",
+        "provenance": {
+          "fixture": "zrw-manual-qa"
+        }
+      },
+      {
+        "id": "draft-isolated-no-doi",
+        "zoteroItemKey": "QANOID01",
+        "workId": "work:zotero:QANOID01",
+        "title": "No DOI Isolated Work",
+        "content": "Manual QA draft for no DOI isolated work.",
+        "promptTaskTemplateId": "single-paper-chinese-summary",
+        "llmProviderId": "manual-qa-provider",
+        "inputContext": {
+          "title": "No DOI Isolated Work",
+          "doi": "未记录"
+        },
+        "createdAt": "2026-05-20T11:07:00.000Z",
+        "confirmationState": "draft",
+        "provenance": {
+          "fixture": "zrw-manual-qa"
+        }
+      }
+    ],
+    "graphSeeds": [
+      {
+        "id": "seed-multisource-a",
+        "workId": "work:qa:multi-source",
+        "zoteroItemKey": "QAMULTI1",
+        "source": {
+          "title": "Multi Source Work",
+          "doi": "10.5555/manual-multi-source"
+        },
+        "relationType": "supports",
+        "target": {
+          "kind": "work-hint",
+          "text": "Target From Graph Seed"
+        },
+        "evidence": {
+          "source": "manual-fixture",
+          "text": "Graph seed evidence for multi source work."
+        },
+        "providerId": "manual-qa-provider",
+        "confidence": "medium",
+        "seedKind": "user-confirmed",
+        "reviewState": "confirmed",
+        "createdAt": "2026-05-20T11:08:00.000Z",
+        "provenance": {
+          "fixture": "zrw-manual-qa",
+          "writeTarget": "local-snapshot-only"
+        }
+      },
+      {
+        "id": "seed-pending-filter",
+        "workId": "work:qa:pending-seed",
+        "zoteroItemKey": "QAPEND01",
+        "source": {
+          "title": "Pending Seed Work",
+          "doi": "10.5555/manual-pending"
+        },
+        "relationType": "related",
+        "target": {
+          "kind": "work-hint",
+          "text": "Pending Review Target"
+        },
+        "evidence": {
+          "source": "manual-fixture",
+          "text": "Pending graph seed evidence."
+        },
+        "providerId": "manual-qa-provider",
+        "confidence": "low",
+        "seedKind": "ai-inferred",
+        "reviewState": "pending",
+        "createdAt": "2026-05-20T11:09:00.000Z",
+        "provenance": {
+          "fixture": "zrw-manual-qa",
+          "writeTarget": "local-snapshot-only"
+        }
+      },
+      {
+        "id": "seed-rejected-filter",
+        "workId": "work:qa:rejected-seed",
+        "zoteroItemKey": "QAREJ01",
+        "source": {
+          "title": "Rejected Seed Work",
+          "doi": "10.5555/manual-rejected"
+        },
+        "relationType": "contrasts",
+        "target": {
+          "kind": "work-hint",
+          "text": "Rejected Review Target"
+        },
+        "evidence": {
+          "source": "manual-fixture",
+          "text": "Rejected graph seed evidence."
+        },
+        "providerId": "manual-qa-provider",
+        "confidence": "high",
+        "seedKind": "ai-inferred",
+        "reviewState": "rejected",
+        "reviewNote": "Manual QA rejected fixture.",
+        "createdAt": "2026-05-20T11:10:00.000Z",
+        "provenance": {
+          "fixture": "zrw-manual-qa",
+          "writeTarget": "local-snapshot-only"
+        }
+      }
+    ],
+    "citationRelations": [
+      {
+        "id": "relation-complete",
+        "sourceWorkId": "work:qa:multi-source",
+        "source": {
+          "title": "Multi Source Work",
+          "doi": "10.5555/manual-multi-source",
+          "zoteroItemKey": "QAMULTI1"
+        },
+        "relationType": "supports",
+        "target": {
+          "kind": "work-hint",
+          "text": "Complete Target Work"
+        },
+        "evidence": {
+          "source": "manual-fixture",
+          "text": "Complete evidence."
+        },
+        "confidence": "high",
+        "graphSeedId": "seed-multisource-a",
+        "createdAt": "2026-05-20T11:11:00.000Z",
+        "provenance": {
+          "fixture": "zrw-manual-qa",
+          "writeTarget": "local-snapshot-only"
+        }
+      },
+      {
+        "id": "relation-low-confidence",
+        "sourceWorkId": "work:qa:low-confidence",
+        "source": {
+          "title": "Low Confidence Relation Work",
+          "doi": "10.5555/manual-low-confidence",
+          "zoteroItemKey": "QALOW001"
+        },
+        "relationType": "related",
+        "target": {
+          "kind": "work-hint",
+          "text": "Low Confidence Target"
+        },
+        "evidence": {
+          "source": "manual-fixture",
+          "text": "Low confidence evidence."
+        },
+        "confidence": "low",
+        "graphSeedId": "seed-low-confidence",
+        "createdAt": "2026-05-20T11:12:00.000Z",
+        "provenance": {
+          "fixture": "zrw-manual-qa",
+          "writeTarget": "local-snapshot-only"
+        }
+      },
+      {
+        "id": "relation-missing-target",
+        "sourceWorkId": "work:qa:missing-target",
+        "source": {
+          "title": "Missing Target Relation Work",
+          "doi": "10.5555/manual-missing-target",
+          "zoteroItemKey": "QAMISS01"
+        },
+        "relationType": "related",
+        "target": {
+          "kind": "work-hint",
+          "text": ""
+        },
+        "evidence": {
+          "source": "manual-fixture",
+          "text": "Evidence is present but target is missing."
+        },
+        "confidence": "medium",
+        "graphSeedId": "seed-missing-target",
+        "createdAt": "2026-05-20T11:13:00.000Z",
+        "provenance": {
+          "fixture": "zrw-manual-qa",
+          "writeTarget": "local-snapshot-only"
+        }
+      },
+      {
+        "id": "relation-missing-evidence",
+        "sourceWorkId": "work:qa:missing-evidence",
+        "source": {
+          "title": "Missing Evidence Relation Work",
+          "doi": "10.5555/manual-missing-evidence",
+          "zoteroItemKey": "QAMISS02"
+        },
+        "relationType": "contrasts",
+        "target": {
+          "kind": "work-hint",
+          "text": "Missing Evidence Target"
+        },
+        "evidence": {
+          "source": "manual-fixture",
+          "text": ""
+        },
+        "confidence": "medium",
+        "graphSeedId": "seed-missing-evidence",
+        "createdAt": "2026-05-20T11:14:00.000Z",
+        "provenance": {
+          "fixture": "zrw-manual-qa",
+          "writeTarget": "local-snapshot-only"
+        }
+      },
+      {
+        "id": "relation-missing-seed",
+        "sourceWorkId": "work:qa:missing-seed",
+        "source": {
+          "title": "Missing Seed Relation Work",
+          "doi": "10.5555/manual-missing-seed",
+          "zoteroItemKey": "QAMISS03"
+        },
+        "relationType": "cites",
+        "target": {
+          "kind": "work-hint",
+          "text": "Missing Seed Target"
+        },
+        "evidence": {
+          "source": "manual-fixture",
+          "text": "Evidence is present but graph seed id is missing."
+        },
+        "confidence": "medium",
+        "graphSeedId": "",
+        "createdAt": "2026-05-20T11:15:00.000Z",
+        "provenance": {
+          "fixture": "zrw-manual-qa",
+          "writeTarget": "local-snapshot-only"
+        }
+      }
+    ],
+    "taskLedger": [
+      {
+        "id": "task-manual-qa-fixture-created",
+        "workflowStep": "manual-qa-fixture",
+        "state": "completed",
+        "providerId": null,
+        "promptTaskTemplateId": null,
+        "outputLocation": {
+          "fixture": "zrw-manual-qa-workbench-snapshot.json"
+        },
+        "errorNotice": {
+          "apiKey": "<redacted>",
+          "token": "<redacted>"
+        },
+        "startedAt": "2026-05-20T11:24:00.000Z",
+        "completedAt": "2026-05-20T11:24:00.000Z",
+        "provenance": {
+          "fixture": "zrw-manual-qa",
+          "writeTarget": "local-snapshot-only"
+        }
+      }
+    ]
+  }
+}

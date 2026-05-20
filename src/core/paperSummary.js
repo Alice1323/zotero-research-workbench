@@ -1,3 +1,11 @@
+const { resolvePromptTemplate, renderPrompt } = require("./index");
+
+const LLM_RUNTIME_LIMITS = {
+  requestsPerMinute: { defaultValue: 20, min: 1, max: 600 },
+  maxInputTokensPerTask: { defaultValue: 12000, min: 1000, max: 200000 },
+  windowMs: 60_000
+};
+
 function normalizePaperContext(input) {
   const title = cleanText(input.title) || "未命名条目";
   return {
@@ -12,28 +20,33 @@ function normalizePaperContext(input) {
   };
 }
 
+function selectBestPdfAttachment(attachments) {
+  const candidates = Array.isArray(attachments) ? attachments : [];
+  for (const attachment of candidates) {
+    const normalized = normalizePdfAttachment(attachment);
+    if (isPdfAttachment(normalized)) {
+      return {
+        available: true,
+        title: normalized.title,
+        path: normalized.path,
+        contentType: normalized.contentType
+      };
+    }
+  }
+  return {
+    available: false,
+    title: "",
+    path: "",
+    contentType: ""
+  };
+}
+
 function buildChinesePaperSummaryPrompt(context) {
-  const paper = normalizePaperContext(context);
-  return [
-    "请用中文为下面这篇 Zotero 文献生成研究阅读摘要。",
-    "",
-    "输出格式必须包含以下小标题：",
-    "1. 研究问题",
-    "2. 研究方法",
-    "3. 主要发现",
-    "4. 局限性",
-    "5. 对后续阅读的建议",
-    "",
-    "文献信息：",
-    `标题：${paper.title}`,
-    `作者：${paper.authors}`,
-    `年份：${paper.year}`,
-    `期刊/来源：${paper.publicationTitle}`,
-    `DOI：${paper.doi}`,
-    `摘要：${paper.abstractNote}`,
-    "",
-    "要求：不要编造摘要中没有的信息；如果信息不足，请明确写出“原始记录未提供”。"
-  ].join("\n");
+  return renderPrompt(resolvePromptTemplate("single-paper-chinese-summary"), createPaperPromptContext(context));
+}
+
+function buildChineseReadingContextTranslationPrompt(context) {
+  return renderPrompt(resolvePromptTemplate("reading-context-chinese-translation"), createReadingPromptContext(context));
 }
 
 function parseChatCompletionText(body) {
@@ -44,20 +57,103 @@ function parseChatCompletionText(body) {
   return text.trim();
 }
 
-function buildSummaryCopyText({ paper, summary }) {
+function buildSummaryCopyText({ paper, summary, draft }) {
   const normalized = normalizePaperContext(paper || {});
-  return [
-    "Zotero 研究工作台 - 文献总结",
+  const lines = [
+    draft?.promptTaskTemplateId === "reading-context-chinese-translation"
+      ? "Zotero 研究工作台 - 阅读上下文翻译"
+      : "Zotero 研究工作台 - 文献总结",
     "",
     `标题：${normalized.title}`,
     `作者：${normalized.authors}`,
     `年份：${normalized.year}`,
     `期刊/来源：${normalized.publicationTitle}`,
-    `DOI：${normalized.doi}`,
-    "",
-    "生成结果：",
-    cleanText(summary)
-  ].join("\n");
+    `DOI：${normalized.doi}`
+  ];
+  if (draft?.promptTaskTemplateId === "reading-context-chinese-translation") {
+    lines.push(`页码：${cleanText(draft?.inputContext?.pageLabel) || "未记录"}`, "", "原文：");
+    lines.push(cleanSelectedText(draft?.inputContext?.selectedText) || "未记录");
+  }
+  lines.push("", "生成结果：", cleanText(summary));
+  return lines.join("\n");
+}
+
+function buildZoteroNoteHtml({ draft, savedAt }) {
+  const context = draft?.inputContext || {};
+  const timestamp = cleanText(savedAt) || new Date().toISOString();
+  const noteKind =
+    draft?.promptTaskTemplateId === "reading-context-chinese-translation"
+      ? "Zotero 研究工作台 - 阅读上下文翻译"
+      : "Zotero 研究工作台 - 文献总结";
+  const metadata = buildZoteroNoteMetadata({ context, draft });
+  const lines = [
+    `<h1>${escapeHtml(draft?.title || noteKind)}</h1>`,
+    `<p><strong>${escapeHtml(noteKind)}</strong></p>`,
+    "<ul>",
+    ...metadata.map(([label, value]) => `<li>${escapeHtml(label)}：${escapeHtml(value || "未记录")}</li>`),
+    `<li>模型：${escapeHtml(draft?.llmProviderId || "未记录")}</li>`,
+    `<li>草稿时间：${escapeHtml(draft?.createdAt || "未记录")}</li>`,
+    `<li>写入时间：${escapeHtml(timestamp)}</li>`,
+    "</ul>",
+    "<h2>生成结果</h2>",
+    `<p>${formatNoteBody(draft?.content || "")}</p>`
+  ];
+  return lines.join("");
+}
+
+function buildZoteroNoteMetadata({ context, draft }) {
+  if (draft?.promptTaskTemplateId === "reading-context-chinese-translation") {
+    return [
+      ["标题", context.title || draft?.title || "未命名条目"],
+      ["来源", context.source || "未记录"],
+      ["页码", context.pageLabel || "未记录"],
+      ["原文", context.selectedText || "未记录"]
+    ];
+  }
+  return [
+    ["标题", context.title || draft?.title || "未命名条目"],
+    ["作者", context.authors || "未记录"],
+    ["年份", context.year || "未记录"],
+    ["期刊/来源", context.publicationTitle || "未记录"],
+    ["DOI", context.doi || "未记录"]
+  ];
+}
+
+function markSummaryDraftSavedToZotero({ snapshot, draftId, zoteroNoteKey, savedAt }) {
+  const timestamp = cleanText(savedAt) || new Date().toISOString();
+  const next = cloneSnapshot(snapshot);
+  const drafts = Array.isArray(next.researchNoteDrafts) ? next.researchNoteDrafts : [];
+  const draft = drafts.find((entry) => entry?.id === draftId);
+  if (!draft) {
+    throw new Error(`草稿不存在：${draftId}`);
+  }
+
+  draft.confirmationState = "confirmed";
+  draft.confirmedZoteroNoteKey = cleanText(zoteroNoteKey);
+  draft.confirmedAt = timestamp;
+  draft.provenance = {
+    ...(draft.provenance || {}),
+    writeTarget: "zotero-note"
+  };
+
+  next.taskLedger = Array.isArray(next.taskLedger) ? next.taskLedger : [];
+  next.taskLedger.push({
+    id: `task-${draft.id}-save-to-zotero-note`,
+    workflowStep: "save-to-zotero-note",
+    state: "completed",
+    providerId: draft.llmProviderId || null,
+    promptTaskTemplateId: draft.promptTaskTemplateId || null,
+    outputLocation: { draftId: draft.id, zoteroNoteKey: cleanText(zoteroNoteKey) },
+    errorNotice: null,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    provenance: {
+      source: "explicit-user-action",
+      writeTarget: "zotero-note"
+    }
+  });
+  next.exportedAt = timestamp;
+  return next;
 }
 
 function createSummaryDraftInput({ paper, summary, model, createdAt }) {
@@ -87,13 +183,46 @@ function createSummaryDraftInput({ paper, summary, model, createdAt }) {
   };
 }
 
+function createReadingTranslationDraftInput({ context, translation, model, createdAt, paper }) {
+  const timestamp = cleanText(createdAt) || new Date().toISOString();
+  const selectedText = cleanSelectedText(context?.text);
+  const itemKey = cleanText(context?.itemKey) || cleanText(paper?.key);
+  const normalizedPaper = normalizePaperContext({
+    ...(paper || {}),
+    key: itemKey || paper?.key
+  });
+  return {
+    id: `draft-${itemKey || "unknown"}-translation-${createStableTimestamp(timestamp)}`,
+    zoteroItemKey: itemKey,
+    workId: createWorkId(normalizedPaper),
+    title: `${normalizedPaper.title} - 阅读上下文翻译`,
+    content: cleanText(translation),
+    promptTaskTemplateId: "reading-context-chinese-translation",
+    llmProviderId: cleanText(model),
+    inputContext: {
+      title: normalizedPaper.title,
+      selectedText,
+      source: cleanText(context?.source),
+      pageLabel: cleanText(context?.pageLabel)
+    },
+    createdAt: timestamp,
+    provenance: {
+      source: "zotero-reader-selection",
+      model: cleanText(model),
+      writeTarget: "local-draft-only"
+    }
+  };
+}
+
 function listRecentSummaryDrafts(snapshot, limit = 5) {
   const maxItems = Number.isInteger(limit) && limit > 0 ? limit : 5;
   return (Array.isArray(snapshot?.researchNoteDrafts) ? snapshot.researchNoteDrafts : [])
     .filter(
       (draft) =>
         draft?.confirmationState === "draft" &&
-        draft?.promptTaskTemplateId === "single-paper-chinese-summary"
+        ["single-paper-chinese-summary", "reading-context-chinese-translation"].includes(
+          draft?.promptTaskTemplateId
+        )
     )
     .slice()
     .sort((left, right) => Date.parse(right.createdAt || "") - Date.parse(left.createdAt || ""))
@@ -107,7 +236,54 @@ function listRecentSummaryDrafts(snapshot, limit = 5) {
     }));
 }
 
-async function requestPaperSummary({ paper, settings, fetchImpl }) {
+function listRecentGraphSeeds(snapshot, limit = 5) {
+  const maxItems = Number.isInteger(limit) && limit > 0 ? limit : 5;
+  return (Array.isArray(snapshot?.graphSeeds) ? snapshot.graphSeeds : [])
+    .slice()
+    .sort((left, right) => parseTimestamp(right.createdAt) - parseTimestamp(left.createdAt))
+    .slice(0, maxItems)
+    .map((seed) => ({
+      id: cleanDisplayText(seed?.id),
+      sourceTitle: cleanDisplayText(seed?.source?.title || seed?.workId) || "未记录",
+      relationType: cleanDisplayText(seed?.relationType) || "related",
+      target: describeTarget(seed?.target),
+      evidence: describeEvidence(seed?.evidence),
+      provider: cleanDisplayText(seed?.providerId) || "未记录",
+      confidence: cleanDisplayText(seed?.confidence) || "low",
+      seedKind: cleanDisplayText(seed?.seedKind) || "ai-inferred",
+      createdAt: cleanDisplayText(seed?.createdAt)
+    }));
+}
+
+function listRecentTaskLedger(snapshot, limit = 5) {
+  const maxItems = Number.isInteger(limit) && limit > 0 ? limit : 5;
+  return (Array.isArray(snapshot?.taskLedger) ? snapshot.taskLedger : [])
+    .slice()
+    .sort((left, right) => parseTimestamp(taskTimestamp(right)) - parseTimestamp(taskTimestamp(left)))
+    .slice(0, maxItems)
+    .map((task) => ({
+      id: cleanDisplayText(task?.id),
+      workflowStep: cleanDisplayText(task?.workflowStep) || "未记录",
+      state: cleanDisplayText(task?.state) || "unknown",
+      provider: cleanDisplayText(task?.providerId) || "未记录",
+      promptTaskTemplateId: cleanDisplayText(task?.promptTaskTemplateId) || "未记录",
+      outputLocation: describeOutputLocation(task?.outputLocation),
+      errorMessage: describeTaskError(task?.errorNotice),
+      occurredAt: cleanDisplayText(taskTimestamp(task))
+    }));
+}
+
+async function requestReadingContextTranslation({ context, settings, fetchImpl, promptOverrides, runtimeGuard }) {
+  const prompt = renderPrompt(
+    resolvePromptTemplate("reading-context-chinese-translation", promptOverrides),
+    createReadingPromptContext(context)
+  );
+  assertLlmRuntimeRequestAllowed({
+    prompt,
+    settings,
+    taskType: "reading-context-chinese-translation",
+    runtimeGuard
+  });
   const response = await fetchImpl(`${settings.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
@@ -116,7 +292,44 @@ async function requestPaperSummary({ paper, settings, fetchImpl }) {
     },
     body: JSON.stringify({
       model: settings.model,
-      messages: [{ role: "user", content: buildChinesePaperSummaryPrompt(paper) }],
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1
+    })
+  });
+
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("API 密钥无效");
+    }
+    if (response.status === 408 || response.status === 504) {
+      throw new Error("请求超时");
+    }
+    throw new Error(`翻译生成失败（HTTP ${response.status}）`);
+  }
+
+  return parseChatCompletionText(parseJsonResponseText(await readResponseText(response)));
+}
+
+async function requestPaperSummary({ paper, settings, fetchImpl, promptOverrides, runtimeGuard }) {
+  const prompt = renderPrompt(
+    resolvePromptTemplate("single-paper-chinese-summary", promptOverrides),
+    createPaperPromptContext(paper)
+  );
+  assertLlmRuntimeRequestAllowed({
+    prompt,
+    settings,
+    taskType: "single-paper-chinese-summary",
+    runtimeGuard
+  });
+  const response = await fetchImpl(`${settings.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${settings.apiKey}`
+    },
+    body: JSON.stringify({
+      model: settings.model,
+      messages: [{ role: "user", content: prompt }],
       temperature: 0.2
     })
   });
@@ -132,6 +345,101 @@ async function requestPaperSummary({ paper, settings, fetchImpl }) {
   }
 
   return parseChatCompletionText(parseJsonResponseText(await readResponseText(response)));
+}
+
+function assertLlmRuntimeRequestAllowed({ prompt, settings, taskType, runtimeGuard }) {
+  const maxInputTokensPerTask = normalizeRuntimeLimit(
+    settings?.maxInputTokensPerTask,
+    LLM_RUNTIME_LIMITS.maxInputTokensPerTask
+  );
+  const estimatedTokens = estimatePromptTokens(prompt);
+  if (estimatedTokens > maxInputTokensPerTask) {
+    throw createLlmRuntimeError("输入内容超过单任务 Token 上限", {
+      taskType,
+      estimatedTokens,
+      maxInputTokensPerTask
+    });
+  }
+
+  runtimeGuard?.assertRequestAllowed?.({
+    taskType,
+    requestsPerMinute: settings?.requestsPerMinute
+  });
+}
+
+function createLlmRuntimeGuard({ now } = {}) {
+  const clock = typeof now === "function" ? now : () => Date.now();
+  const requestTimestamps = [];
+  return {
+    assertRequestAllowed({ taskType, requestsPerMinute } = {}) {
+      const limit = normalizeRuntimeLimit(requestsPerMinute, LLM_RUNTIME_LIMITS.requestsPerMinute);
+      const current = Number(clock());
+      const cutoff = current - LLM_RUNTIME_LIMITS.windowMs;
+      while (requestTimestamps.length && requestTimestamps[0] <= cutoff) {
+        requestTimestamps.shift();
+      }
+      if (requestTimestamps.length >= limit) {
+        throw createLlmRuntimeError("请求过于频繁，请稍后再试", {
+          taskType,
+          requestsInWindow: requestTimestamps.length,
+          requestsPerMinute: limit,
+          windowMs: LLM_RUNTIME_LIMITS.windowMs
+        });
+      }
+      requestTimestamps.push(current);
+      return {
+        requestsInWindow: requestTimestamps.length,
+        requestsPerMinute: limit,
+        windowMs: LLM_RUNTIME_LIMITS.windowMs
+      };
+    }
+  };
+}
+
+function estimatePromptTokens(prompt) {
+  const value = cleanDisplayText(prompt);
+  if (!value) {
+    return 0;
+  }
+  const cjkPattern = /[\u3400-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]/g;
+  const cjkCount = (value.match(cjkPattern) || []).length;
+  const nonCjkCharacters = value.replace(cjkPattern, "").replace(/\s+/g, "").length;
+  return cjkCount + Math.ceil(nonCjkCharacters / 4);
+}
+
+function normalizeRuntimeLimit(value, rule) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return rule.defaultValue;
+  }
+  return Math.min(rule.max, Math.max(rule.min, Math.round(numeric)));
+}
+
+function createLlmRuntimeError(message, metadata) {
+  const error = new Error(message);
+  error.name = "LlmRuntimeGuardError";
+  Object.assign(error, metadata);
+  return error;
+}
+
+function createPaperPromptContext(input) {
+  const paper = normalizePaperContext(input || {});
+  return {
+    itemTitle: paper.title,
+    itemAuthors: paper.authors,
+    abstract: paper.abstractNote,
+    year: paper.year,
+    publicationTitle: paper.publicationTitle,
+    doi: paper.doi
+  };
+}
+
+function createReadingPromptContext(context) {
+  return {
+    selectedText: cleanSelectedText(context?.text),
+    pageLabel: cleanText(context?.pageLabel) || "未记录",
+    source: cleanText(context?.source) || "reader-selection"
+  };
 }
 
 async function readResponseText(response) {
@@ -185,6 +493,88 @@ function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizePdfAttachment(attachment) {
+  return {
+    title: cleanDisplayText(attachment?.title || attachment?.filename || attachment?.name),
+    path: cleanDisplayText(attachment?.path || attachment?.filePath),
+    contentType: cleanDisplayText(attachment?.contentType || attachment?.mimeType)
+  };
+}
+
+function isPdfAttachment(attachment) {
+  const contentType = attachment.contentType.toLowerCase();
+  const path = attachment.path.toLowerCase();
+  const title = attachment.title.toLowerCase();
+  return contentType === "application/pdf" || path.endsWith(".pdf") || title.endsWith(".pdf");
+}
+
+function cleanDisplayText(value) {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  if (typeof value === "object" || typeof value === "function") {
+    return "";
+  }
+  return String(value).trim();
+}
+
+function describeTarget(target) {
+  if (!target || typeof target !== "object") {
+    return cleanDisplayText(target) || "未记录";
+  }
+  return (
+    cleanDisplayText(target.text) ||
+    cleanDisplayText(target.title) ||
+    cleanDisplayText(target.doi) ||
+    cleanDisplayText(target.key) ||
+    describeKeyValueObject(target)
+  );
+}
+
+function describeEvidence(evidence) {
+  if (!evidence || typeof evidence !== "object") {
+    return cleanDisplayText(evidence) || "未记录";
+  }
+  return cleanDisplayText(evidence.text) || describeKeyValueObject(evidence);
+}
+
+function describeOutputLocation(outputLocation) {
+  if (!outputLocation || typeof outputLocation !== "object") {
+    return cleanDisplayText(outputLocation) || "未记录";
+  }
+  return describeKeyValueObject(outputLocation);
+}
+
+function describeTaskError(errorNotice) {
+  if (!errorNotice) {
+    return "无";
+  }
+  if (typeof errorNotice !== "object") {
+    return cleanDisplayText(errorNotice) || "无";
+  }
+  return cleanDisplayText(errorNotice.message) || describeKeyValueObject(errorNotice);
+}
+
+function describeKeyValueObject(value) {
+  const entries = Object.entries(value || {})
+    .map(([key, entry]) => [cleanDisplayText(key), cleanDisplayText(entry)])
+    .filter(([key, entry]) => key && entry);
+  return entries.length ? entries.map(([key, entry]) => `${key}: ${entry}`).join("；") : "未记录";
+}
+
+function taskTimestamp(task) {
+  return task?.completedAt || task?.startedAt || "";
+}
+
+function parseTimestamp(value) {
+  const timestamp = Date.parse(cleanDisplayText(value));
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function cleanSelectedText(value) {
+  return cleanText(value).replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/[ \t]+\n/g, "\n").trim();
+}
+
 function createWorkId(paper) {
   if (paper.doi && paper.doi !== "未记录") {
     return `work:doi:${paper.doi}`;
@@ -196,12 +586,39 @@ function createStableTimestamp(value) {
   return value.replace(/[^0-9A-Za-z]+/g, "-").replace(/-$/, "");
 }
 
+function cloneSnapshot(snapshot) {
+  return JSON.parse(JSON.stringify(snapshot || {}));
+}
+
+function formatNoteBody(value) {
+  return escapeHtml(cleanText(value)).replace(/\r?\n/g, "<br/>");
+}
+
+function escapeHtml(value) {
+  return cleanText(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 module.exports = {
+  buildChineseReadingContextTranslationPrompt,
   buildChinesePaperSummaryPrompt,
   buildSummaryCopyText,
+  buildZoteroNoteHtml,
+  assertLlmRuntimeRequestAllowed,
+  createLlmRuntimeGuard,
+  createReadingTranslationDraftInput,
   createSummaryDraftInput,
+  estimatePromptTokens,
+  listRecentGraphSeeds,
   listRecentSummaryDrafts,
+  listRecentTaskLedger,
+  markSummaryDraftSavedToZotero,
   normalizePaperContext,
   parseChatCompletionText,
-  requestPaperSummary
+  requestReadingContextTranslation,
+  requestPaperSummary,
+  selectBestPdfAttachment
 };

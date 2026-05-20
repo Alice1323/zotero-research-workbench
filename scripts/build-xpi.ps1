@@ -22,6 +22,7 @@ Copy-Item -LiteralPath (Join-Path $projectRoot "chrome/content/researchPanel.xht
 Copy-Item -LiteralPath (Join-Path $projectRoot "chrome/content/workbenchPlugin.mjs") -Destination (Join-Path $packageDir "chrome/content")
 Copy-Item -LiteralPath (Join-Path $projectRoot "chrome/content/providerConnection.js") -Destination (Join-Path $packageDir "chrome/content")
 Copy-Item -LiteralPath (Join-Path $projectRoot "chrome/content/providerSettings.js") -Destination (Join-Path $packageDir "chrome/content")
+Copy-Item -LiteralPath (Join-Path $projectRoot "chrome/content/readingContext.js") -Destination (Join-Path $packageDir "chrome/content")
 Copy-Item -LiteralPath (Join-Path $projectRoot "chrome/content/paperSummary.js") -Destination (Join-Path $packageDir "chrome/content")
 
 if (Test-Path $xpiPath) {

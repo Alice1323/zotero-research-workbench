@@ -10,12 +10,18 @@ test("build script exists and documents the runtime package boundary", () => {
   assert.equal(fs.existsSync(scriptPath), true);
 
   const script = fs.readFileSync(scriptPath, "utf8");
+  const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
   assert.match(script, /manifest\.json/);
   assert.match(script, /bootstrap\.js/);
   assert.match(script, /chrome\/content/);
   assert.match(script, /paperSummary\.js/);
+  assert.match(script, /readingContext\.js/);
   assert.match(script, /dist/);
   assert.match(script, /zotero-research-workbench-\$Version\.xpi/);
   assert.doesNotMatch(script, /docs\/superpowers/);
   assert.doesNotMatch(script, /tests/);
+  assert.match(readme, /导出工作台状态/);
+  assert.match(readme, /导入工作台状态/);
+  assert.match(readme, /API 密钥/);
+  assert.match(readme, /WebDAV 密码/);
 });

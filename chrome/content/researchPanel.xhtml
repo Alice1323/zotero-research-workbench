@@ -56,6 +56,17 @@
         line-height: 1.45;
       }
 
+      .reading-context-output {
+        min-height: 72px;
+        max-height: 160px;
+        overflow: auto;
+        white-space: pre-wrap;
+        border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+        border-radius: 6px;
+        padding: 10px;
+        line-height: 1.5;
+      }
+
       .summary-output {
         min-height: 120px;
         max-height: 260px;
@@ -79,16 +90,40 @@
         line-height: 28px;
       }
 
+      .result-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
       .result-header button {
         min-height: 28px;
         padding-inline: 10px;
+      }
+
+      .primary-action {
+        font-weight: 600;
       }
 
       .drafts-header {
         margin-block: 12px 6px;
       }
 
+      .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-block: 12px 6px;
+      }
+
       .recent-drafts {
+        display: grid;
+        gap: 6px;
+      }
+
+      .record-list {
         display: grid;
         gap: 6px;
       }
@@ -106,7 +141,25 @@
         font-weight: 600;
       }
 
+      .record-item {
+        display: grid;
+        gap: 3px;
+        min-height: 44px;
+        padding: 6px 8px;
+        border: 1px solid color-mix(in srgb, CanvasText 14%, transparent);
+        border-radius: 6px;
+      }
+
+      .record-title {
+        font-weight: 600;
+      }
+
       .draft-meta {
+        color: color-mix(in srgb, CanvasText 68%, transparent);
+        font-size: 0.92em;
+      }
+
+      .record-meta {
         color: color-mix(in srgb, CanvasText 68%, transparent);
         font-size: 0.92em;
       }
@@ -115,6 +168,33 @@
         display: grid;
         gap: 8px;
         margin-block: 10px 12px;
+      }
+
+      .filter-control {
+        display: grid;
+        gap: 4px;
+      }
+
+      .segmented-filter {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .segmented-filter button {
+        min-height: 28px;
+        padding-inline: 10px;
+        border: 1px solid color-mix(in srgb, CanvasText 22%, transparent);
+        border-radius: 6px;
+        background: ButtonFace;
+        color: ButtonText;
+      }
+
+      .segmented-filter button[aria-pressed="true"] {
+        border-color: Highlight;
+        background: color-mix(in srgb, Highlight 18%, Canvas);
+        color: CanvasText;
+        font-weight: 600;
       }
 
       label {
@@ -127,14 +207,85 @@
         box-sizing: border-box;
       }
 
+      select {
+        min-height: 28px;
+        box-sizing: border-box;
+      }
+
+      textarea {
+        min-height: 160px;
+        box-sizing: border-box;
+        resize: vertical;
+        font: menu;
+      }
+
       .actions {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
       }
+
+      .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .checkbox-label input {
+        min-height: auto;
+      }
+
+      .error-details {
+        margin-block: -4px 8px;
+        color: color-mix(in srgb, CanvasText 72%, transparent);
+      }
+
+      .error-details[hidden] {
+        display: none;
+      }
+
+      .error-details pre {
+        max-height: 160px;
+        overflow: auto;
+        white-space: pre-wrap;
+        border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+        border-radius: 6px;
+        padding: 8px;
+      }
+
+      .option-help {
+        margin-block: 0 10px;
+        color: color-mix(in srgb, CanvasText 72%, transparent);
+        font-size: 0.92em;
+      }
+
+      .section-header .option-help {
+        margin-block: 0;
+      }
+
+      .option-help-toggle {
+        min-height: 28px;
+        padding: 3px 10px;
+        border: 1px solid color-mix(in srgb, CanvasText 22%, transparent);
+        border-radius: 6px;
+        background: ButtonFace;
+        color: ButtonText;
+        cursor: default;
+      }
+
+      .option-help[open] {
+        display: grid;
+        gap: 4px;
+      }
+
+      .option-help ul {
+        margin-block: 4px 0;
+        padding-inline-start: 18px;
+      }
     </style>
     <script src="providerConnection.js"></script>
     <script src="providerSettings.js"></script>
+    <script src="readingContext.js"></script>
     <script src="paperSummary.js"></script>
   </head>
   <body>
@@ -146,19 +297,36 @@
           <span>选中文献</span>
           <div id="selected-paper-title" class="paper-title">未选择文献</div>
           <div id="selected-paper-meta" class="paper-meta">请在 Zotero 主窗口中选中一篇文献</div>
+          <div id="selected-paper-pdf" class="paper-meta">PDF 附件：未找到 PDF 附件</div>
           <div id="selected-paper-abstract" class="paper-abstract"></div>
         </div>
         <div class="actions">
           <button id="refresh-paper-context" type="button">刷新当前上下文</button>
           <button id="summarize-selected-paper" type="button">总结选中文献</button>
         </div>
+        <div class="paper-context" aria-live="polite">
+          <span>阅读上下文</span>
+          <div id="reading-context-meta" class="paper-meta">暂无阅读器选中文本</div>
+          <div id="reading-context-output" class="reading-context-output">暂无阅读器选中文本</div>
+        </div>
+        <div class="actions">
+          <button id="refresh-reading-context" type="button">刷新阅读上下文</button>
+          <button id="translate-reading-context" type="button">翻译阅读上下文</button>
+        </div>
         <p id="paper-summary-status" class="status" aria-live="polite"></p>
+        <details id="paper-error-details" class="error-details" hidden="hidden">
+          <summary>技术细节</summary>
+          <pre id="paper-error-detail-text"></pre>
+        </details>
         <p class="status">
           草稿状态：<span id="paper-draft-status">当前结果尚未保存</span>
         </p>
         <div class="result-header">
           <strong>生成结果</strong>
-          <button id="copy-paper-summary" type="button">复制结果</button>
+          <div class="result-actions">
+            <button id="copy-paper-summary" type="button">复制结果</button>
+            <button id="save-paper-summary-note" class="primary-action" type="button">确认并写入 Zotero 笔记</button>
+          </div>
         </div>
         <div id="paper-summary-output" class="summary-output" aria-live="polite"></div>
         <div class="drafts-header">
@@ -167,10 +335,331 @@
         <div id="recent-drafts-list" class="recent-drafts" aria-live="polite">
           <span class="status">暂无草稿</span>
         </div>
+        <div class="drafts-header">
+          <strong>图谱种子</strong>
+        </div>
+        <div class="field-grid">
+          <label>
+            <span>目标论文或作品线索</span>
+            <input id="graph-seed-target" type="text" value="" />
+          </label>
+          <label>
+            <span>关系类型</span>
+            <select id="graph-seed-relation">
+              <option value="related">相关</option>
+              <option value="supports">支持</option>
+              <option value="contrasts">对比</option>
+              <option value="cites">引用</option>
+            </select>
+          </label>
+          <label>
+            <span>置信度</span>
+            <select id="graph-seed-confidence">
+              <option value="medium">中</option>
+              <option value="low">低</option>
+              <option value="high">高</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="capture-graph-seed" type="button">捕获图谱种子</button>
+        </div>
+        <p id="graph-seed-status" class="status" aria-live="polite"></p>
+        <details id="graph-seed-error-details" class="error-details" hidden="hidden">
+          <summary>技术细节</summary>
+          <pre id="graph-seed-error-detail-text"></pre>
+        </details>
       </section>
       <section>
         <strong>全局入口</strong>
         <p>服务商、提示词模板、任务记录、导出与导入。</p>
+        <p class="status">仅导出脱敏 JSON/ZIP，不包含 API 密钥或 WebDAV 密码。</p>
+        <div class="actions">
+          <button id="export-workbench-state" type="button">导出工作台状态</button>
+          <button id="import-workbench-state" type="button">导入工作台状态</button>
+          <button id="export-workbench-zip" type="button">导出 ZIP</button>
+          <button id="import-workbench-zip" type="button">导入 ZIP</button>
+          <button id="refresh-workbench-records" type="button">刷新记录</button>
+        </div>
+        <p id="workbench-export-status" class="status" aria-live="polite"></p>
+        <details id="workbench-error-details" class="error-details" hidden="hidden">
+          <summary>技术细节</summary>
+          <pre id="workbench-error-detail-text"></pre>
+        </details>
+        <div class="drafts-header">
+          <strong>提示词模板</strong>
+        </div>
+        <div class="field-grid">
+          <label>
+            <span>模板任务</span>
+            <select id="prompt-template-selector">
+              <option value="single-paper-chinese-summary">单篇文献中文总结</option>
+              <option value="reading-context-chinese-translation">阅读上下文中文翻译</option>
+            </select>
+          </label>
+          <label>
+            <span>允许变量</span>
+            <input id="prompt-template-variables" type="text" value="" readonly="readonly" />
+          </label>
+          <label>
+            <span>模板内容</span>
+            <textarea id="prompt-template-body"></textarea>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="prompt-template-save" type="button">保存提示词模板</button>
+          <button id="prompt-template-reset" type="button">重置为默认模板</button>
+        </div>
+        <p id="prompt-template-status" class="status" aria-live="polite"></p>
+        <details id="prompt-template-error-details" class="error-details" hidden="hidden">
+          <summary>技术细节</summary>
+          <pre id="prompt-template-error-detail-text"></pre>
+        </details>
+        <div class="drafts-header">
+          <strong>WebDAV 导出目标</strong>
+        </div>
+        <p class="status">Nutstore/坚果云可使用 WebDAV 地址、账号和应用密码；仅手动上传脱敏 JSON。</p>
+        <div class="field-grid">
+          <label>
+            <span>服务器地址</span>
+            <input id="webdav-server-url" type="url" value="" placeholder="https://dav.jianguoyun.com/dav" />
+          </label>
+          <label>
+            <span>用户名</span>
+            <input id="webdav-username" type="text" value="" />
+          </label>
+          <label>
+            <span>密码</span>
+            <input id="webdav-password" type="password" value="" />
+          </label>
+          <label>
+            <span>远端目录</span>
+            <input id="webdav-remote-directory" type="text" value="" placeholder="zotero/workbench" />
+          </label>
+        </div>
+        <div class="actions">
+          <button id="webdav-save" type="button">保存 WebDAV 设置</button>
+          <button id="webdav-test" type="button">测试 WebDAV</button>
+          <button id="webdav-upload-json" type="button">上传 JSON 到 WebDAV</button>
+        </div>
+        <p id="webdav-status" class="status" aria-live="polite"></p>
+        <details id="webdav-error-details" class="error-details" hidden="hidden">
+          <summary>技术细节</summary>
+          <pre id="webdav-error-detail-text"></pre>
+        </details>
+        <div class="drafts-header">
+          <strong>最近图谱种子</strong>
+        </div>
+        <div id="graph-seeds-list" class="record-list" aria-live="polite">
+          <span class="status">暂无图谱种子</span>
+        </div>
+        <div class="drafts-header">
+          <strong>最近任务记录</strong>
+        </div>
+        <div id="task-ledger-list" class="record-list" aria-live="polite">
+          <span class="status">暂无任务记录</span>
+        </div>
+        <div class="section-header">
+          <strong>作品身份线索</strong>
+          <details class="option-help">
+            <summary class="option-help-toggle">查看选项说明</summary>
+            <ul>
+              <li>当前作品：只显示当前选中文献对应的数据。</li>
+              <li>全部线索：显示本地工作台中记录过的全部作品身份线索。</li>
+              <li>身份筛选只显示需要对应复查提示的本地作品身份线索。</li>
+            </ul>
+          </details>
+        </div>
+        <div class="field-grid">
+          <div class="filter-control">
+            <span>身份范围</span>
+            <input id="work-identity-scope-filter" type="hidden" value="current-work" />
+            <div class="segmented-filter" data-filter-target="work-identity-scope-filter" role="group" aria-label="身份范围">
+              <button type="button" data-filter-value="current-work" aria-pressed="true">当前作品</button>
+              <button type="button" data-filter-value="all" aria-pressed="false">全部线索</button>
+            </div>
+          </div>
+          <div class="filter-control">
+            <span>身份筛选</span>
+            <input id="work-identity-status-filter" type="hidden" value="all" />
+            <div class="segmented-filter" data-filter-target="work-identity-status-filter" role="group" aria-label="身份筛选">
+              <button type="button" data-filter-value="all" aria-pressed="true">全部身份</button>
+              <button type="button" data-filter-value="无 DOI" aria-pressed="false">无 DOI</button>
+              <button type="button" data-filter-value="多来源" aria-pressed="false">多来源</button>
+              <button type="button" data-filter-value="有引用关系" aria-pressed="false">有引用关系</button>
+              <button type="button" data-filter-value="孤立线索" aria-pressed="false">孤立线索</button>
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="refresh-work-identity-inspector" type="button">刷新身份线索</button>
+        </div>
+        <div id="work-identity-inspector-list" class="record-list" aria-live="polite">
+          <span class="status">暂无作品身份线索</span>
+        </div>
+        <div class="section-header">
+          <strong>重复作品候选</strong>
+          <details class="option-help">
+            <summary class="option-help-toggle">查看选项说明</summary>
+            <ul>
+              <li>全部关系：显示本地工作台中所有可能重复的作品候选。</li>
+              <li>当前作品：只显示与当前选中文献有关的重复候选。</li>
+              <li>高：DOI 或 Zotero 条目键完全相同，优先复查。</li>
+              <li>中：标题归一化后相同，仅作为人工判断提示。</li>
+              <li>共享 DOI：多个作品记录使用同一个 DOI。</li>
+              <li>共享 Zotero 条目键：多个作品记录指向同一个 Zotero 条目键。</li>
+              <li>标题相似：多个作品标题归一化后相同。</li>
+            </ul>
+          </details>
+        </div>
+        <div class="field-grid">
+          <div class="filter-control">
+            <span>候选范围</span>
+            <input id="duplicate-work-scope-filter" type="hidden" value="all" />
+            <div class="segmented-filter" data-filter-target="duplicate-work-scope-filter" role="group" aria-label="候选范围">
+              <button type="button" data-filter-value="all" aria-pressed="true">全部关系</button>
+              <button type="button" data-filter-value="current-work" aria-pressed="false">当前作品</button>
+            </div>
+          </div>
+          <div class="filter-control">
+            <span>置信度</span>
+            <input id="duplicate-work-confidence-filter" type="hidden" value="all" />
+            <div class="segmented-filter" data-filter-target="duplicate-work-confidence-filter" role="group" aria-label="重复候选置信度">
+              <button type="button" data-filter-value="all" aria-pressed="true">全部</button>
+              <button type="button" data-filter-value="high" aria-pressed="false">高</button>
+              <button type="button" data-filter-value="medium" aria-pressed="false">中</button>
+            </div>
+          </div>
+          <div class="filter-control">
+            <span>匹配原因</span>
+            <input id="duplicate-work-reason-filter" type="hidden" value="all" />
+            <div class="segmented-filter" data-filter-target="duplicate-work-reason-filter" role="group" aria-label="匹配原因">
+              <button type="button" data-filter-value="all" aria-pressed="true">全部</button>
+              <button type="button" data-filter-value="shared-doi" aria-pressed="false">共享 DOI</button>
+              <button type="button" data-filter-value="shared-zotero-key" aria-pressed="false">共享 Zotero 条目键</button>
+              <button type="button" data-filter-value="similar-title" aria-pressed="false">标题相似</button>
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="refresh-duplicate-work-candidates" type="button">刷新重复候选</button>
+        </div>
+        <div id="duplicate-work-candidates-list" class="record-list" aria-live="polite">
+          <span class="status">暂无重复作品候选</span>
+        </div>
+        <div class="section-header">
+          <strong>引用关系图谱</strong>
+          <details class="option-help">
+            <summary class="option-help-toggle">查看选项说明</summary>
+            <ul>
+              <li>当前作品：只显示当前选中文献作为来源的引用关系。</li>
+              <li>全部关系：显示本地工作台中已经生成的全部引用关系。</li>
+              <li>质量筛选只显示需要对应复查提示的本地引用关系。</li>
+            </ul>
+          </details>
+        </div>
+        <div class="field-grid">
+          <div class="filter-control">
+            <span>关系范围</span>
+            <input id="citation-graph-scope-filter" type="hidden" value="current-work" />
+            <div class="segmented-filter" data-filter-target="citation-graph-scope-filter" role="group" aria-label="关系范围">
+              <button type="button" data-filter-value="current-work" aria-pressed="true">当前作品</button>
+              <button type="button" data-filter-value="all" aria-pressed="false">全部关系</button>
+            </div>
+          </div>
+          <div class="filter-control">
+            <span>质量筛选</span>
+            <input id="citation-graph-quality-filter" type="hidden" value="all" />
+            <div class="segmented-filter" data-filter-target="citation-graph-quality-filter" role="group" aria-label="质量筛选">
+              <button type="button" data-filter-value="all" aria-pressed="true">全部质量</button>
+              <button type="button" data-filter-value="缺少目标" aria-pressed="false">缺少目标</button>
+              <button type="button" data-filter-value="缺少证据" aria-pressed="false">缺少证据</button>
+              <button type="button" data-filter-value="低置信度" aria-pressed="false">低置信度</button>
+              <button type="button" data-filter-value="缺少来源种子" aria-pressed="false">缺少来源种子</button>
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="refresh-citation-graph-inspector" type="button">刷新关系图谱</button>
+        </div>
+        <div id="citation-graph-inspector-list" class="record-list" aria-live="polite">
+          <span class="status">暂无引用关系</span>
+        </div>
+        <div class="section-header">
+          <strong>图谱种子复核队列</strong>
+          <details class="option-help">
+            <summary class="option-help-toggle">查看选项说明</summary>
+            <ul>
+              <li>待复核：尚未人工确认或拒绝的图谱种子。</li>
+              <li>全部：显示所有复核状态的图谱种子。</li>
+              <li>已确认：已经人工确认，可以生成本地引用关系。</li>
+              <li>已拒绝：人工判断不应进入后续关系图谱的种子。</li>
+              <li>服务商筛选：按捕获种子时记录的模型或服务商精确筛选。</li>
+              <li>高/中/低：图谱种子自身记录的置信度。</li>
+              <li>相关/支持/对比/引用：种子描述的论文关系类型。</li>
+              <li>用户确认：由用户明确捕获或确认。</li>
+              <li>AI 推断：由模型或规则推断，必须复核后再使用。</li>
+              <li>仅当前作品：只显示当前选中文献对应的图谱种子。</li>
+            </ul>
+          </details>
+        </div>
+        <div class="field-grid">
+          <div class="filter-control">
+            <span>复核状态</span>
+            <input id="graph-seed-review-state-filter" type="hidden" value="pending" />
+            <div class="segmented-filter" data-filter-target="graph-seed-review-state-filter" role="group" aria-label="复核状态">
+              <button type="button" data-filter-value="pending" aria-pressed="true">待复核</button>
+              <button type="button" data-filter-value="all" aria-pressed="false">全部</button>
+              <button type="button" data-filter-value="confirmed" aria-pressed="false">已确认</button>
+              <button type="button" data-filter-value="rejected" aria-pressed="false">已拒绝</button>
+            </div>
+          </div>
+          <label>
+            <span>服务商筛选</span>
+            <input id="graph-seed-provider-filter" type="text" value="" />
+          </label>
+          <div class="filter-control">
+            <span>置信度</span>
+            <input id="graph-seed-confidence-filter" type="hidden" value="all" />
+            <div class="segmented-filter" data-filter-target="graph-seed-confidence-filter" role="group" aria-label="置信度">
+              <button type="button" data-filter-value="all" aria-pressed="true">全部</button>
+              <button type="button" data-filter-value="high" aria-pressed="false">高</button>
+              <button type="button" data-filter-value="medium" aria-pressed="false">中</button>
+              <button type="button" data-filter-value="low" aria-pressed="false">低</button>
+            </div>
+          </div>
+          <div class="filter-control">
+            <span>关系类型</span>
+            <input id="graph-seed-relation-filter" type="hidden" value="all" />
+            <div class="segmented-filter" data-filter-target="graph-seed-relation-filter" role="group" aria-label="关系类型">
+              <button type="button" data-filter-value="all" aria-pressed="true">全部</button>
+              <button type="button" data-filter-value="related" aria-pressed="false">相关</button>
+              <button type="button" data-filter-value="supports" aria-pressed="false">支持</button>
+              <button type="button" data-filter-value="contrasts" aria-pressed="false">对比</button>
+              <button type="button" data-filter-value="cites" aria-pressed="false">引用</button>
+            </div>
+          </div>
+          <div class="filter-control">
+            <span>种子来源</span>
+            <input id="graph-seed-kind-filter" type="hidden" value="all" />
+            <div class="segmented-filter" data-filter-target="graph-seed-kind-filter" role="group" aria-label="种子来源">
+              <button type="button" data-filter-value="all" aria-pressed="true">全部</button>
+              <button type="button" data-filter-value="user-confirmed" aria-pressed="false">用户确认</button>
+              <button type="button" data-filter-value="ai-inferred" aria-pressed="false">AI 推断</button>
+            </div>
+          </div>
+          <label class="checkbox-label">
+            <input id="graph-seed-current-work-only" type="checkbox" />
+            <span>仅当前作品</span>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="refresh-graph-seed-review" type="button">刷新复核队列</button>
+        </div>
+        <p class="status">已确认图谱种子可生成关系；已生成关系会显示为本地引用关系。</p>
+        <div id="graph-seed-review-list" class="record-list" aria-live="polite">
+          <span class="status">暂无待复核图谱种子</span>
+        </div>
       </section>
       <section>
         <strong>LLM 服务商设置</strong>
@@ -187,12 +676,28 @@
             <span>模型名称</span>
             <input id="provider-model" type="text" value="" placeholder="例如 gpt-4.1-mini" />
           </label>
+          <label>
+            <span>请求超时（毫秒）</span>
+            <input id="provider-timeout-ms" type="number" min="1000" max="120000" step="1000" value="15000" />
+          </label>
+          <label>
+            <span>每分钟请求数</span>
+            <input id="provider-requests-per-minute" type="number" min="1" max="600" step="1" value="20" />
+          </label>
+          <label>
+            <span>单任务输入 Token 上限</span>
+            <input id="provider-max-input-tokens" type="number" min="1000" max="200000" step="1000" value="12000" />
+          </label>
         </div>
         <div class="actions">
           <button id="provider-save" type="button">保存设置</button>
           <button id="provider-test" type="button">测试连接</button>
         </div>
-        <p id="provider-status" aria-live="polite"></p>
+        <p id="provider-status" class="status" aria-live="polite"></p>
+        <details id="provider-error-details" class="error-details" hidden="hidden">
+          <summary>技术细节</summary>
+          <pre id="provider-error-detail-text"></pre>
+        </details>
       </section>
     </main>
   </body>

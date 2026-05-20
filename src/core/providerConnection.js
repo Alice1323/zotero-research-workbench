@@ -3,7 +3,7 @@ async function testOpenAICompatibleConnection(settings, options = {}) {
   const apiKey = (settings.apiKey || "").trim();
   const model = (settings.model || "").trim();
   const fetchImpl = options.fetch || globalThis.fetch;
-  const timeoutMs = options.timeoutMs || 15000;
+  const timeoutMs = normalizeTimeoutMs(options.timeoutMs ?? settings.timeoutMs);
 
   if (!baseUrl || !model) {
     return { ok: false, message: "请先保存接口地址和模型名称" };
@@ -29,6 +29,9 @@ async function testOpenAICompatibleConnection(settings, options = {}) {
     const response = await requestChatCompletion({ baseUrl, apiKey, model, fetchImpl, signal: controller?.signal });
 
     if (response.ok) {
+      if (!(await hasOpenAIChatCompletionContent(response))) {
+        return { ok: false, message: "接口返回格式不是 OpenAI 兼容响应，请检查接口地址" };
+      }
       if (!modelCheck.modelListed) {
         const probeCheck = await verifyImpossibleModelIsRejected({
           baseUrl,
@@ -150,6 +153,11 @@ async function verifyImpossibleModelIsRejected({ baseUrl, apiKey, fetchImpl, sig
   return { ok: false, message: `模型验证失败（HTTP ${response.status}）` };
 }
 
+async function hasOpenAIChatCompletionContent(response) {
+  const body = await readResponseJson(response);
+  return Boolean(cleanString(body?.choices?.[0]?.message?.content));
+}
+
 async function readResponseJson(response) {
   try {
     return await response.json();
@@ -187,6 +195,18 @@ function isModelErrorResponse(status, bodyText) {
     "不支持"
   ].some((marker) => text.includes(marker));
   return mentionsModel && saysUnavailable;
+}
+
+function cleanString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeTimeoutMs(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return 15000;
+  }
+  return Math.round(numeric);
 }
 
 module.exports = {
