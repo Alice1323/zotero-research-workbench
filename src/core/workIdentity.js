@@ -352,8 +352,16 @@ function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-module.exports = {
+const WorkbenchWorkIdentity = {
   listDuplicateWorkCandidates,
   listDuplicateWorkCandidateEvidence,
   listWorkIdentitiesForInspector
 };
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = WorkbenchWorkIdentity;
+}
+
+if (typeof window !== "undefined") {
+  window.WorkbenchWorkIdentity = WorkbenchWorkIdentity;
+}

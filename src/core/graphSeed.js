@@ -293,7 +293,7 @@ function clonePlain(value) {
   return JSON.parse(JSON.stringify(value || {}));
 }
 
-module.exports = {
+const WorkbenchGraphSeed = {
   appendGraphSeedToSnapshot,
   createGraphSeedInput,
   listCitationRelationsForInspector,
@@ -301,3 +301,11 @@ module.exports = {
   markGraphSeedReviewed,
   promoteGraphSeedToCitationRelation
 };
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = WorkbenchGraphSeed;
+}
+
+if (typeof window !== "undefined") {
+  window.WorkbenchGraphSeed = WorkbenchGraphSeed;
+}

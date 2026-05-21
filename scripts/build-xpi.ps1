@@ -1,10 +1,16 @@
 param(
-  [string]$Version = "0.2.0"
+  [string]$Version
 )
 
 $ErrorActionPreference = "Stop"
 
 $projectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+$manifestPath = Join-Path $projectRoot "manifest.json"
+$manifestText = [System.IO.File]::ReadAllText($manifestPath, [System.Text.Encoding]::UTF8)
+$manifest = $manifestText | ConvertFrom-Json
+if (-not $Version) {
+  $Version = $manifest.version
+}
 $distDir = Join-Path $projectRoot "dist"
 $packageDir = Join-Path $distDir "package"
 $xpiPath = Join-Path $distDir "zotero-research-workbench-$Version.xpi"
@@ -27,6 +33,11 @@ Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/providerChatCompletion.
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/llmRuntimeGuard.js") -Destination (Join-Path $packageDir "chrome/content/llmRuntimeGuard.js")
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/workbenchSnapshot.js") -Destination (Join-Path $packageDir "chrome/content/workbenchSnapshot.js")
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/workbenchRuntimeStore.js") -Destination (Join-Path $packageDir "chrome/content/workbenchRuntimeStore.js")
+Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/workbenchLocalStoreTransaction.js") -Destination (Join-Path $packageDir "chrome/content/workbenchLocalStoreTransaction.js")
+Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/graphSeed.js") -Destination (Join-Path $packageDir "chrome/content/graphSeed.js")
+Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/workIdentity.js") -Destination (Join-Path $packageDir "chrome/content/workIdentity.js")
+Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/graphReviewWorkflow.js") -Destination (Join-Path $packageDir "chrome/content/graphReviewWorkflow.js")
+Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/researchPanelOrchestrator.js") -Destination (Join-Path $packageDir "chrome/content/researchPanelOrchestrator.js")
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/zoteroNoteWriter.js") -Destination (Join-Path $packageDir "chrome/content/zoteroNoteWriter.js")
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/webDavClient.js") -Destination (Join-Path $packageDir "chrome/content/webDavClient.js")
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/clipboardWriter.js") -Destination (Join-Path $packageDir "chrome/content/clipboardWriter.js")

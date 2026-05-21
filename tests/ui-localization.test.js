@@ -5,6 +5,27 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 
+function getFunctionBody(source, functionName) {
+  const match = new RegExp(`function ${functionName}\\([^)]*\\) \\{`).exec(source);
+  assert.ok(match, `${functionName} should exist`);
+  let depth = 1;
+  let index = match.index + match[0].length;
+  const start = index;
+  while (index < source.length) {
+    const character = source[index];
+    if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index);
+      }
+    }
+    index += 1;
+  }
+  assert.fail(`${functionName} body should close`);
+}
+
 test("manifest presents Chinese product name and description", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 
@@ -230,6 +251,10 @@ test("research panel runtime wires reading context translation action", () => {
   assert.match(runtime, /function translateReadingContext/);
   assert.match(runtime, /requestReadingContextTranslation/);
   assert.match(runtime, /createReadingTranslationDraftInput/);
+  assert.match(
+    getFunctionBody(runtime, "saveReadingTranslationDraft"),
+    /ResearchPanelOrchestrator\.createReadingTranslationDraftWorkflow/
+  );
   assert.match(runtime, /translate-reading-context"\)\.addEventListener\("click", translateReadingContext\)/);
 });
 
@@ -314,26 +339,60 @@ test("research panel runtime wires provider request guards", () => {
 
 test("research panel runtime wires graph seed capture action", () => {
   const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
+  const captureBody = getFunctionBody(runtime, "captureGraphSeed");
 
   assert.match(runtime, /function captureGraphSeed/);
-  assert.match(runtime, /appendGraphSeedToSnapshot/);
+  assert.match(captureBody, /ResearchPanelOrchestrator\.captureGraphSeedWorkflow/);
+  assert.doesNotMatch(captureBody, /captureGraphSeedTransaction/);
+  assert.doesNotMatch(captureBody, /appendGraphSeedToSnapshot/);
   assert.match(runtime, /createGraphSeedInput/);
   assert.match(runtime, /capture-graph-seed"\)\.addEventListener\("click", captureGraphSeed\)/);
+});
+
+test("research panel runtime routes panel workflows through research panel orchestrator", () => {
+  const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
+  const saveSummaryBody = getFunctionBody(runtime, "saveSummaryDraft");
+  const saveTranslationBody = getFunctionBody(runtime, "saveReadingTranslationDraft");
+  const confirmBody = getFunctionBody(runtime, "saveGeneratedResultToZoteroNote");
+
+  assert.match(saveSummaryBody, /ResearchPanelOrchestrator\.createSummaryDraftWorkflow/);
+  assert.match(saveTranslationBody, /ResearchPanelOrchestrator\.createReadingTranslationDraftWorkflow/);
+  assert.match(confirmBody, /ResearchPanelOrchestrator\.prepareZoteroNoteWrite/);
+  assert.match(confirmBody, /ResearchPanelOrchestrator\.confirmDraftSavedToZoteroWorkflow/);
+  assert.doesNotMatch(saveSummaryBody, /researchNoteDrafts\.push/);
+  assert.doesNotMatch(saveTranslationBody, /researchNoteDrafts\.push/);
+  assert.doesNotMatch(saveSummaryBody, /createResearchNoteDraftTransaction/);
+  assert.doesNotMatch(saveTranslationBody, /createResearchNoteDraftTransaction/);
+  assert.doesNotMatch(confirmBody, /confirmResearchNoteDraftSavedToZoteroTransaction/);
+  assert.doesNotMatch(confirmBody, /markSummaryDraftSavedToZotero/);
 });
 
 test("research panel runtime wires local export and import actions", () => {
   const panel = fs.readFileSync(path.join(root, "chrome/content/researchPanel.xhtml"), "utf8");
   const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
   const fileIo = fs.readFileSync(path.join(root, "src/core/workbenchFileIo.js"), "utf8");
+  const importJsonBody = getFunctionBody(runtime, "importWorkbenchState");
+  const importZipBody = getFunctionBody(runtime, "importWorkbenchZip");
 
   assert.match(panel, /workbenchSnapshot\.js/);
   assert.ok(panel.indexOf("workbenchSnapshot.js") < panel.indexOf("paperSummary.js"));
   assert.match(panel, /workbenchRuntimeStore\.js/);
   assert.ok(panel.indexOf("workbenchRuntimeStore.js") < panel.indexOf("paperSummary.js"));
+  assert.match(panel, /workbenchLocalStoreTransaction\.js/);
+  assert.ok(panel.indexOf("workbenchLocalStoreTransaction.js") < panel.indexOf("paperSummary.js"));
+  assert.match(panel, /graphReviewWorkflow\.js/);
+  assert.ok(panel.indexOf("workbenchLocalStoreTransaction.js") < panel.indexOf("graphReviewWorkflow.js"));
+  assert.ok(panel.indexOf("graphReviewWorkflow.js") < panel.indexOf("paperSummary.js"));
+  assert.match(panel, /researchPanelOrchestrator\.js/);
+  assert.ok(panel.indexOf("graphReviewWorkflow.js") < panel.indexOf("researchPanelOrchestrator.js"));
+  assert.ok(panel.indexOf("researchPanelOrchestrator.js") < panel.indexOf("paperSummary.js"));
   assert.match(runtime, /function exportWorkbenchState/);
   assert.match(runtime, /function importWorkbenchState/);
   assert.match(runtime, /WorkbenchSnapshot/);
   assert.match(runtime, /WorkbenchRuntimeStore/);
+  assert.match(runtime, /WorkbenchLocalStoreTransaction/);
+  assert.match(runtime, /WorkbenchGraphReviewWorkflow/);
+  assert.match(runtime, /WorkbenchResearchPanelOrchestrator/);
   assert.match(runtime, /createWorkbenchRuntimeStore/);
   assert.match(runtime, /WorkbenchLocalStore/);
   assert.match(runtime, /createWorkbenchExportPackage/);
@@ -342,6 +401,10 @@ test("research panel runtime wires local export and import actions", () => {
   assert.match(runtime, /function importWorkbenchZip/);
   assert.match(runtime, /createWorkbenchZipExportPayload/);
   assert.match(runtime, /importWorkbenchZipExportPayload/);
+  assert.match(importJsonBody, /replaceWorkbenchSnapshotFromImportTransaction/);
+  assert.match(importZipBody, /replaceWorkbenchSnapshotFromImportTransaction/);
+  assert.doesNotMatch(importJsonBody, /const snapshot = importWorkbenchExportPackage/);
+  assert.doesNotMatch(importZipBody, /const snapshot = importWorkbenchZipExportPayload/);
   assert.match(runtime, /writeZipExportFile/);
   assert.match(runtime, /readZipExportFile/);
   assert.match(runtime, /writeTextFile/);
@@ -420,17 +483,41 @@ test("research panel runtime wires WebDAV export target actions", () => {
 
 test("research panel runtime wires prompt template override actions", () => {
   const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
+  const saveBody = getFunctionBody(runtime, "savePromptTemplateOverride");
+  const resetBody = getFunctionBody(runtime, "resetPromptTemplateOverride");
 
   assert.match(runtime, /function loadPromptTemplateEditor/);
   assert.match(runtime, /function savePromptTemplateOverride/);
   assert.match(runtime, /function resetPromptTemplateOverride/);
   assert.match(runtime, /function resolvePromptTemplate/);
-  assert.match(runtime, /function upsertPromptOverride/);
-  assert.match(runtime, /function removePromptOverride/);
+  assert.match(saveBody, /const resolved = resolvePromptTemplate\(/);
+  assert.ok(
+    saveBody.indexOf("resolvePromptTemplate") < saveBody.indexOf("upsertPromptOverrideTransaction"),
+    "prompt override save should validate template variables before writing to the local store"
+  );
+  assert.match(saveBody, /templateId: resolved\.id/);
+  assert.match(saveBody, /template: resolved\.template/);
+  assert.match(saveBody, /upsertPromptOverrideTransaction/);
+  assert.match(resetBody, /removePromptOverrideTransaction/);
+  assert.doesNotMatch(saveBody, /const snapshot = upsertPromptOverride\(/);
+  assert.doesNotMatch(resetBody, /const snapshot = removePromptOverride\(/);
   assert.match(runtime, /prompt-template-selector"\)\.addEventListener\("change", loadPromptTemplateEditor\)/);
   assert.match(runtime, /prompt-template-save"\)\.addEventListener\("click", savePromptTemplateOverride\)/);
   assert.match(runtime, /prompt-template-reset"\)\.addEventListener\("click", resetPromptTemplateOverride\)/);
   assert.match(runtime, /showLayeredError\("prompt-template-status"/);
+});
+
+test("research panel runtime does not expose old local-store mutators", () => {
+  const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
+  const exportBody = runtime.slice(runtime.indexOf("window.WorkbenchPaperSummary = {"));
+
+  assert.doesNotMatch(exportBody, /appendGraphSeedToSnapshot/);
+  assert.doesNotMatch(exportBody, /markSummaryDraftSavedToZotero/);
+  assert.doesNotMatch(exportBody, /markGraphSeedReviewed/);
+  assert.doesNotMatch(exportBody, /promoteGraphSeedToCitationRelation/);
+  assert.doesNotMatch(exportBody, /upsertPromptOverride/);
+  assert.doesNotMatch(exportBody, /removePromptOverride/);
+  assert.match(exportBody, /WorkbenchLocalStoreTransaction/);
 });
 
 test("research panel runtime routes high-risk failures through layered errors", () => {
@@ -494,31 +581,27 @@ test("WebDAV authentication failures keep technical details available", () => {
 
 test("research panel runtime wires read-only workbench record rendering", () => {
   const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
+  const renderBody = getFunctionBody(runtime, "renderWorkbenchRecords");
 
   assert.match(runtime, /function renderWorkbenchRecords/);
-  assert.match(runtime, /listRecentGraphSeeds/);
-  assert.match(runtime, /listRecentTaskLedger/);
+  assert.match(renderBody, /ResearchPanelOrchestrator\.createPanelRecords/);
+  assert.match(renderBody, /renderGraphSeedRecords\(records\.recentGraphSeeds\)/);
+  assert.match(renderBody, /renderTaskLedgerRecords\(records\.recentTaskLedger\)/);
   assert.match(runtime, /refresh-workbench-records"\)\.addEventListener\("click", renderWorkbenchRecords\)/);
 });
 
 test("research panel runtime wires citation graph inspector", () => {
   const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
+  const renderBody = getFunctionBody(runtime, "renderCitationGraphInspector");
 
   assert.match(runtime, /function renderCitationGraphInspector/);
-  assert.match(runtime, /function listCitationRelationsForInspector/);
-  assert.match(runtime, /function createCitationRelationQualityTags/);
+  assert.match(renderBody, /createCurrentGraphReviewReadModel/);
+  assert.match(renderBody, /\.citationRelations/);
   assert.match(runtime, /function formatCitationRelationQualityTags/);
   assert.match(runtime, /qualityTags/);
-  assert.match(runtime, /缺少目标/);
-  assert.match(runtime, /缺少证据/);
-  assert.match(runtime, /低置信度/);
-  assert.match(runtime, /缺少来源种子/);
   assert.match(runtime, /证据：\$\{relation\.evidence\}｜来源种子：\$\{relation\.graphSeedId\}\$\{formatCitationRelationQualityTags\(relation\.qualityTags\)\}/);
   assert.match(runtime, /function readCitationGraphInspectorFilters/);
   assert.match(runtime, /qualityTag:\s*cleanText\(getField\("citation-graph-quality-filter"\)\?\.value\) \|\| "all"/);
-  assert.match(runtime, /function matchesCitationRelationInspectorFilters/);
-  assert.match(runtime, /isActiveFilter\(filters\.qualityTag\)/);
-  assert.match(runtime, /relation\.qualityTags\.includes\(cleanText\(filters\.qualityTag\)\)/);
   assert.match(runtime, /citation-graph-inspector-list/);
   assert.match(runtime, /refresh-citation-graph-inspector"\)\.addEventListener\("click", renderCitationGraphInspector\)/);
   assert.match(runtime, /renderCitationGraphInspector\(\)/);
@@ -526,20 +609,15 @@ test("research panel runtime wires citation graph inspector", () => {
 
 test("research panel runtime wires work identity inspector", () => {
   const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
+  const renderBody = getFunctionBody(runtime, "renderWorkIdentityInspector");
 
   assert.match(runtime, /function renderWorkIdentityInspector/);
-  assert.match(runtime, /function listWorkIdentitiesForInspector/);
-  assert.match(runtime, /function createWorkIdentityStatusTags/);
+  assert.match(renderBody, /createCurrentGraphReviewReadModel/);
+  assert.match(renderBody, /\.workIdentities/);
   assert.match(runtime, /function formatWorkIdentityStatusTags/);
   assert.match(runtime, /statusTags/);
-  assert.match(runtime, /无 DOI/);
-  assert.match(runtime, /多来源/);
-  assert.match(runtime, /有引用关系/);
-  assert.match(runtime, /孤立线索/);
   assert.match(runtime, /function readWorkIdentityInspectorFilters/);
   assert.match(runtime, /statusTag:\s*cleanText\(getField\("work-identity-status-filter"\)\?\.value\) \|\| "all"/);
-  assert.match(runtime, /isActiveFilter\(filters\.statusTag\)/);
-  assert.match(runtime, /work\.statusTags\.includes\(cleanText\(filters\.statusTag\)\)/);
   assert.match(runtime, /work-identity-inspector-list/);
   assert.match(runtime, /refresh-work-identity-inspector"\)\.addEventListener\("click", renderWorkIdentityInspector\)/);
   assert.match(runtime, /renderWorkIdentityInspector\(\)/);
@@ -547,14 +625,15 @@ test("research panel runtime wires work identity inspector", () => {
 
 test("research panel runtime wires duplicate work candidates", () => {
   const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
+  const renderBody = getFunctionBody(runtime, "renderDuplicateWorkCandidates");
 
   assert.match(runtime, /function renderDuplicateWorkCandidates/);
-  assert.match(runtime, /function listDuplicateWorkCandidates/);
-  assert.match(runtime, /function listDuplicateWorkCandidateEvidence/);
   assert.match(runtime, /function createDuplicateWorkCandidateEvidenceDetails/);
   assert.match(runtime, /function readDuplicateWorkCandidateFilters/);
   assert.match(runtime, /function synchronizeDuplicateWorkCandidateFilters/);
   assert.match(runtime, /function duplicateConfidenceForReason/);
+  assert.match(renderBody, /createCurrentGraphReviewReadModel/);
+  assert.match(runtime, /listGraphReviewDuplicateWorkCandidateEvidence/);
   assert.match(runtime, /duplicate-work-confidence-filter/);
   assert.match(runtime, /duplicate-work-reason-filter/);
   assert.match(runtime, /duplicate-work-candidates-list/);
@@ -567,6 +646,9 @@ test("research panel runtime wires duplicate work candidates", () => {
 
 test("research panel runtime wires graph seed review queue", () => {
   const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
+  const renderBody = getFunctionBody(runtime, "renderGraphSeedReviewQueue");
+  const reviewBody = getFunctionBody(runtime, "reviewGraphSeed");
+  const promoteBody = getFunctionBody(runtime, "promoteGraphSeed");
 
   assert.match(runtime, /function renderGraphSeedReviewQueue/);
   assert.match(runtime, /function reviewGraphSeed/);
@@ -576,9 +658,11 @@ test("research panel runtime wires graph seed review queue", () => {
   assert.match(runtime, /document\.createElementNS\(HTML_NS, tagName\)/);
   assert.match(runtime, /createHtmlElement\("button"\)/);
   assert.doesNotMatch(runtime, /document\.createElement\("(?:button|div|span|textarea)"\)/);
-  assert.match(runtime, /listGraphSeedsForReview/);
-  assert.match(runtime, /markGraphSeedReviewed/);
-  assert.match(runtime, /promoteGraphSeedToCitationRelation/);
+  assert.match(renderBody, /createCurrentGraphReviewReadModel/);
+  assert.match(reviewBody, /ResearchPanelOrchestrator\.reviewGraphSeedWorkflow/);
+  assert.match(promoteBody, /ResearchPanelOrchestrator\.promoteGraphSeedWorkflow/);
+  assert.doesNotMatch(reviewBody, /reviewGraphSeedTransaction/);
+  assert.doesNotMatch(promoteBody, /promoteGraphSeedTransaction/);
   assert.match(runtime, /refresh-graph-seed-review"\)\.addEventListener\("click", renderGraphSeedReviewQueue\)/);
 });
 

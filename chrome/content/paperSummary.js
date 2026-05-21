@@ -33,6 +33,40 @@
     throw new Error("WorkbenchRuntimeStore runtime Module is unavailable");
   }
   const { createWorkbenchRuntimeStore } = WorkbenchRuntimeStore;
+  const WorkbenchLocalStoreTransaction = window.WorkbenchLocalStoreTransaction;
+  if (!WorkbenchLocalStoreTransaction) {
+    throw new Error("WorkbenchLocalStoreTransaction runtime Module is unavailable");
+  }
+  const {
+    removePromptOverrideTransaction,
+    replaceWorkbenchSnapshotFromImportTransaction,
+    upsertPromptOverrideTransaction
+  } = WorkbenchLocalStoreTransaction;
+  const WorkbenchGraphReviewWorkflow = window.WorkbenchGraphReviewWorkflow;
+  if (!WorkbenchGraphReviewWorkflow) {
+    throw new Error("WorkbenchGraphReviewWorkflow runtime Module is unavailable");
+  }
+  const {
+    createGraphReviewReadModel,
+    listGraphReviewDuplicateWorkCandidateEvidence
+  } = WorkbenchGraphReviewWorkflow;
+  const WorkbenchResearchPanelOrchestrator = window.WorkbenchResearchPanelOrchestrator;
+  if (!WorkbenchResearchPanelOrchestrator) {
+    throw new Error("WorkbenchResearchPanelOrchestrator runtime Module is unavailable");
+  }
+  const { createResearchPanelOrchestrator } = WorkbenchResearchPanelOrchestrator;
+  const ResearchPanelOrchestrator = createResearchPanelOrchestrator({
+    paperSummaryModule: {
+      buildZoteroNoteHtml,
+      createReadingTranslationDraftInput,
+      createSummaryDraftInput,
+      listRecentGraphSeeds,
+      listRecentSummaryDrafts,
+      listRecentTaskLedger
+    },
+    graphReviewWorkflowModule: WorkbenchGraphReviewWorkflow,
+    transactionModule: WorkbenchLocalStoreTransaction
+  });
   const WorkbenchLlmRuntimeGuardModule = window.WorkbenchLlmRuntimeGuard;
   if (!WorkbenchLlmRuntimeGuardModule) {
     throw new Error("WorkbenchLlmRuntimeGuard runtime Module is unavailable");
@@ -436,20 +470,24 @@
     showStatus("paper-summary-status", "正在写入 Zotero 笔记...");
 
     try {
+      const noteWrite = ResearchPanelOrchestrator.prepareZoteroNoteWrite({ draft, savedAt });
       const { noteKey } = await writeZoteroChildNote({
         Zotero,
         parentItem,
-        html: buildZoteroNoteHtml({ draft, savedAt })
+        html: noteWrite.html
       });
 
-      const snapshot = markSummaryDraftSavedToZotero({
+      const result = ResearchPanelOrchestrator.confirmDraftSavedToZoteroWorkflow({
         snapshot: loadWorkbenchSnapshot(),
         draftId: draft.id,
         zoteroNoteKey: noteKey,
-        savedAt
+        savedAt: noteWrite.savedAt,
+        selectedWorkId: currentSelectedWorkId(),
+        filters: readGraphReviewFilters()
       });
+      const snapshot = result.snapshot;
       saveWorkbenchSnapshot(snapshot);
-      window.WorkbenchLastDraft = snapshot.researchNoteDrafts.find((entry) => entry.id === draft.id) || draft;
+      window.WorkbenchLastDraft = result.draft || snapshot.researchNoteDrafts.find((entry) => entry.id === draft.id) || draft;
       showStatus("paper-summary-status", "已写入 Zotero 笔记");
       getField("paper-draft-status").textContent = `已确认并写入 Zotero 笔记（${formatLocalTime(savedAt)}）`;
       renderRecentDrafts();
@@ -477,11 +515,14 @@
         seedKind: "user-confirmed",
         createdAt
       });
-      const snapshot = appendGraphSeedToSnapshot({
+      const result = ResearchPanelOrchestrator.captureGraphSeedWorkflow({
         snapshot: loadWorkbenchSnapshot(),
         seedInput,
-        createdAt
+        createdAt,
+        selectedWorkId: currentSelectedWorkId(),
+        filters: readGraphReviewFilters()
       });
+      const snapshot = result.snapshot;
       saveWorkbenchSnapshot(snapshot);
       showStatus("graph-seed-status", `已捕获图谱种子（${formatLocalTime(createdAt)}）`);
       getField("graph-seed-target").value = "";
@@ -539,7 +580,13 @@
       }
 
       const raw = await readTextFile(sourceFile);
-      const snapshot = importWorkbenchExportPackage(raw);
+      const importedSnapshot = importWorkbenchExportPackage(raw);
+      const result = replaceWorkbenchSnapshotFromImportTransaction({
+        snapshot: importedSnapshot,
+        importedAt: new Date().toISOString(),
+        sourceKind: "json"
+      });
+      const snapshot = result.snapshot;
       saveWorkbenchSnapshot(snapshot);
       window.WorkbenchLastDraft = null;
       renderRecentDrafts();
@@ -593,7 +640,13 @@
       }
 
       const payload = await readZipExportFile(sourceFile);
-      const snapshot = importWorkbenchZipExportPayload(payload);
+      const importedSnapshot = importWorkbenchZipExportPayload(payload);
+      const result = replaceWorkbenchSnapshotFromImportTransaction({
+        snapshot: importedSnapshot,
+        importedAt: new Date().toISOString(),
+        sourceKind: "zip"
+      });
+      const snapshot = result.snapshot;
       saveWorkbenchSnapshot(snapshot);
       window.WorkbenchLastDraft = null;
       renderRecentDrafts();
@@ -632,10 +685,19 @@
     try {
       const selector = getField("prompt-template-selector");
       const body = getField("prompt-template-body");
-      const snapshot = upsertPromptOverride(loadWorkbenchSnapshot(), {
+      const resolved = resolvePromptTemplate(selector.value, [{
         templateId: selector.value,
         template: body.value
+      }]);
+      const result = upsertPromptOverrideTransaction({
+        snapshot: loadWorkbenchSnapshot(),
+        overrideInput: {
+          templateId: resolved.id,
+          template: resolved.template
+        },
+        updatedAt: new Date().toISOString()
       });
+      const snapshot = result.snapshot;
       saveWorkbenchSnapshot(snapshot);
       loadPromptTemplateEditor();
       showStatus("prompt-template-status", "提示词模板已保存");
@@ -647,7 +709,12 @@
   function resetPromptTemplateOverride() {
     try {
       const selector = getField("prompt-template-selector");
-      const snapshot = removePromptOverride(loadWorkbenchSnapshot(), selector.value);
+      const result = removePromptOverrideTransaction({
+        snapshot: loadWorkbenchSnapshot(),
+        templateId: selector.value,
+        updatedAt: new Date().toISOString()
+      });
+      const snapshot = result.snapshot;
       saveWorkbenchSnapshot(snapshot);
       loadPromptTemplateEditor();
       showStatus("prompt-template-status", "已重置为默认提示词模板");
@@ -836,75 +903,35 @@
   }
 
   function saveSummaryDraft({ paper, summary, model }) {
-    const snapshot = loadWorkbenchSnapshot();
-    const draftInput = createSummaryDraftInput({
+    const result = ResearchPanelOrchestrator.createSummaryDraftWorkflow({
+      snapshot: loadWorkbenchSnapshot(),
       paper,
       summary,
       model,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      selectedWorkId: currentSelectedWorkId(),
+      filters: readGraphReviewFilters()
     });
-    const draft = {
-      ...draftInput,
-      confirmationState: "draft"
-    };
-
-    snapshot.researchNoteDrafts = snapshot.researchNoteDrafts || [];
-    snapshot.taskLedger = snapshot.taskLedger || [];
-    snapshot.researchNoteDrafts.push(draft);
-    snapshot.taskLedger.push({
-      id: `task-${draft.id}`,
-      workflowStep: "create-research-note-draft",
-      state: "completed",
-      providerId: model,
-      promptTaskTemplateId: draft.promptTaskTemplateId,
-      outputLocation: { draftId: draft.id },
-      errorNotice: null,
-      startedAt: draft.createdAt,
-      completedAt: draft.createdAt,
-      provenance: {
-        source: "zotero-selection",
-        writeTarget: "local-draft-only"
-      }
-    });
-    snapshot.exportedAt = new Date().toISOString();
+    const snapshot = result.snapshot;
+    const draft = result.draft;
     saveWorkbenchSnapshot(snapshot);
     window.WorkbenchLastDraft = draft;
     return draft;
   }
 
   function saveReadingTranslationDraft({ context, paper, translation, model }) {
-    const snapshot = loadWorkbenchSnapshot();
-    const draftInput = createReadingTranslationDraftInput({
+    const result = ResearchPanelOrchestrator.createReadingTranslationDraftWorkflow({
+      snapshot: loadWorkbenchSnapshot(),
       context,
       paper,
       translation,
       model,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      selectedWorkId: currentSelectedWorkId(),
+      filters: readGraphReviewFilters()
     });
-    const draft = {
-      ...draftInput,
-      confirmationState: "draft"
-    };
-
-    snapshot.researchNoteDrafts = snapshot.researchNoteDrafts || [];
-    snapshot.taskLedger = snapshot.taskLedger || [];
-    snapshot.researchNoteDrafts.push(draft);
-    snapshot.taskLedger.push({
-      id: `task-${draft.id}`,
-      workflowStep: "create-research-note-draft",
-      state: "completed",
-      providerId: model,
-      promptTaskTemplateId: draft.promptTaskTemplateId,
-      outputLocation: { draftId: draft.id },
-      errorNotice: null,
-      startedAt: draft.createdAt,
-      completedAt: draft.createdAt,
-      provenance: {
-        source: "zotero-reader-selection",
-        writeTarget: "local-draft-only"
-      }
-    });
-    snapshot.exportedAt = new Date().toISOString();
+    const snapshot = result.snapshot;
+    const draft = result.draft;
     saveWorkbenchSnapshot(snapshot);
     window.WorkbenchLastDraft = draft;
     return draft;
@@ -1058,22 +1085,31 @@
 
   function renderWorkbenchRecords() {
     const snapshot = loadWorkbenchSnapshot();
-    renderGraphSeedRecords(listRecentGraphSeeds(snapshot));
-    renderTaskLedgerRecords(listRecentTaskLedger(snapshot));
-    renderWorkIdentityInspector();
-    renderDuplicateWorkCandidates();
-    renderCitationGraphInspector();
+    const records = ResearchPanelOrchestrator.createPanelRecords(snapshot, {
+      selectedWorkId: currentSelectedWorkId(),
+      filters: readGraphReviewFilters()
+    });
+    renderGraphSeedRecords(records.recentGraphSeeds);
+    renderTaskLedgerRecords(records.recentTaskLedger);
+    renderWorkIdentityInspector(records.graphReview);
+    renderDuplicateWorkCandidates(records.graphReview, snapshot);
+    renderCitationGraphInspector(records.graphReview);
   }
 
-  function renderWorkIdentityInspector() {
+  function createCurrentGraphReviewReadModel(snapshot = loadWorkbenchSnapshot()) {
+    return createGraphReviewReadModel({
+      snapshot,
+      selectedWorkId: currentSelectedWorkId(),
+      filters: readGraphReviewFilters()
+    });
+  }
+
+  function renderWorkIdentityInspector(graphReview = null) {
     const list = getField("work-identity-inspector-list");
     if (!list) {
       return;
     }
-    const works = listWorkIdentitiesForInspector(
-      loadWorkbenchSnapshot(),
-      readWorkIdentityInspectorFilters()
-    );
+    const works = (graphReview || createCurrentGraphReviewReadModel()).workIdentities;
     list.textContent = "";
 
     if (!works.length) {
@@ -1104,13 +1140,13 @@
     };
   }
 
-  function renderDuplicateWorkCandidates() {
+  function renderDuplicateWorkCandidates(graphReview = null, sourceSnapshot = null) {
     const list = getField("duplicate-work-candidates-list");
     if (!list) {
       return;
     }
-    const snapshot = loadWorkbenchSnapshot();
-    const candidates = listDuplicateWorkCandidates(snapshot, readDuplicateWorkCandidateFilters());
+    const snapshot = sourceSnapshot || loadWorkbenchSnapshot();
+    const candidates = (graphReview || createCurrentGraphReviewReadModel(snapshot)).duplicateWorkCandidates;
     list.textContent = "";
 
     if (!candidates.length) {
@@ -1138,15 +1174,12 @@
     };
   }
 
-  function renderCitationGraphInspector() {
+  function renderCitationGraphInspector(graphReview = null) {
     const list = getField("citation-graph-inspector-list");
     if (!list) {
       return;
     }
-    const relations = listCitationRelationsForInspector(
-      loadWorkbenchSnapshot(),
-      readCitationGraphInspectorFilters()
-    );
+    const relations = (graphReview || createCurrentGraphReviewReadModel()).citationRelations;
     list.textContent = "";
 
     if (!relations.length) {
@@ -1172,12 +1205,21 @@
     };
   }
 
-  function renderGraphSeedReviewQueue() {
+  function readGraphReviewFilters() {
+    return {
+      graphSeedReview: readGraphSeedReviewFilters(),
+      citationGraph: readCitationGraphInspectorFilters(),
+      workIdentity: readWorkIdentityInspectorFilters(),
+      duplicateWork: readDuplicateWorkCandidateFilters()
+    };
+  }
+
+  function renderGraphSeedReviewQueue(graphReview = null) {
     const list = getField("graph-seed-review-list");
     if (!list) {
       return;
     }
-    const seeds = listGraphSeedsForReview(loadWorkbenchSnapshot(), readGraphSeedReviewFilters());
+    const seeds = (graphReview || createCurrentGraphReviewReadModel()).graphSeedReviewQueue;
     list.textContent = "";
 
     if (!seeds.length) {
@@ -1221,12 +1263,15 @@
 
   function reviewGraphSeed(seedId, reviewState) {
     try {
-      const snapshot = markGraphSeedReviewed({
+      const result = ResearchPanelOrchestrator.reviewGraphSeedWorkflow({
         snapshot: loadWorkbenchSnapshot(),
         seedId,
         reviewState,
-        reviewedAt: new Date().toISOString()
+        reviewedAt: new Date().toISOString(),
+        selectedWorkId: currentSelectedWorkId(),
+        filters: readGraphReviewFilters()
       });
+      const snapshot = result.snapshot;
       saveWorkbenchSnapshot(snapshot);
       showStatus("workbench-export-status", reviewState === "confirmed" ? "图谱种子已确认" : "图谱种子已拒绝");
       renderWorkbenchRecords();
@@ -1238,13 +1283,27 @@
 
   function promoteGraphSeed(seedId) {
     try {
-      const snapshot = promoteGraphSeedToCitationRelation({
+      const result = ResearchPanelOrchestrator.promoteGraphSeedWorkflow({
         snapshot: loadWorkbenchSnapshot(),
         seedId,
-        promotedAt: new Date().toISOString()
+        promotedAt: new Date().toISOString(),
+        selectedWorkId: currentSelectedWorkId(),
+        filters: readGraphReviewFilters()
       });
+      if (result.status === "notConfirmed") {
+        showStatus("workbench-export-status", "图谱种子尚未确认");
+        return;
+      }
+      if (result.status === "missingSeed") {
+        showStatus("workbench-export-status", "未找到图谱种子");
+        return;
+      }
+      const snapshot = result.snapshot;
       saveWorkbenchSnapshot(snapshot);
-      showStatus("workbench-export-status", "已生成引用关系");
+      showStatus(
+        "workbench-export-status",
+        result.status === "alreadyPromoted" ? "引用关系已存在" : "已生成引用关系"
+      );
       renderWorkbenchRecords();
       renderGraphSeedReviewQueue();
     } catch (error) {
@@ -1449,7 +1508,7 @@
     summary.textContent = "查看证据";
     details.appendChild(summary);
 
-    const evidence = listDuplicateWorkCandidateEvidence(snapshot, candidate);
+    const evidence = listGraphReviewDuplicateWorkCandidateEvidence({ snapshot, candidate });
     if (!evidence.length) {
       const empty = createHtmlElement("span");
       empty.className = "record-meta";
@@ -2762,7 +2821,6 @@
   }
 
   window.WorkbenchPaperSummary = {
-    appendGraphSeedToSnapshot,
     buildChineseReadingContextTranslationPrompt,
     buildChinesePaperSummaryPrompt,
     buildSummaryCopyText,
@@ -2770,7 +2828,6 @@
     buildWebDavDirectoryRequests,
     buildZoteroNoteHtml,
     assertLlmRuntimeRequestAllowed,
-    markSummaryDraftSavedToZotero,
     captureGraphSeed,
     createLlmRuntimeGuard,
     createWorkbenchExportPackage,
@@ -2797,18 +2854,15 @@
     loadWorkbenchSnapshot,
     loadRecentDraft,
     loadWebDavSettings,
-    markGraphSeedReviewed,
     normalizeWebDavExportTarget,
     normalizePaperContext,
     parseChatCompletionText,
     readSelectedPaperContext,
     readSelectedPaperPdfAttachment,
-    removePromptOverride,
     renderRecentDrafts,
     renderGraphSeedReviewQueue,
     initializeSegmentedFilters,
     promoteGraphSeed,
-    promoteGraphSeedToCitationRelation,
     resolvePromptTemplate,
     requestReadingContextTranslation,
     requestPaperSummary,
@@ -2821,7 +2875,7 @@
     savePromptTemplateOverride,
     selectBestPdfAttachment,
     testWebDavConnection,
-    upsertPromptOverride,
+    WorkbenchLocalStoreTransaction,
     uploadWorkbenchJsonToWebDav,
     writeZipExportFile
   };

@@ -1,8 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+const core = require("../src/core");
 const {
   SECRET_PLACEHOLDER,
+  WorkbenchLocalStoreTransaction,
   WorkbenchLocalStore,
   buildWebDavDirectoryRequests,
   buildWebDavExportRequest,
@@ -15,11 +17,9 @@ const {
   importWorkbenchZipExportPayload,
   normalizeWebDavExportTarget,
   redactSecretMaterial,
-  removePromptOverride,
   resolvePromptTemplate,
-  upsertPromptOverride,
   renderPrompt
-} = require("../src/core");
+} = core;
 
 test("OpenAI-compatible provider exposes contract fields and keeps secret material local", () => {
   const provider = createOpenAICompatibleProvider({
@@ -95,10 +95,16 @@ test("renderPrompt substitutes only declared reading context", () => {
 
 test("prompt overrides replace built-in templates and reject unsafe variables", () => {
   const snapshot = { promptOverrides: [] };
-  const next = upsertPromptOverride(snapshot, {
-    templateId: "single-paper-chinese-summary",
-    template: "请只输出标题：{{itemTitle}}\n摘要：{{abstract}}"
-  });
+  assert.equal(core.upsertPromptOverride, undefined);
+  assert.equal(core.removePromptOverride, undefined);
+  const next = WorkbenchLocalStoreTransaction.upsertPromptOverrideTransaction({
+    snapshot,
+    overrideInput: {
+      templateId: "single-paper-chinese-summary",
+      template: "请只输出标题：{{itemTitle}}\n摘要：{{abstract}}"
+    },
+    updatedAt: "2026-05-21T00:04:30.000Z"
+  }).snapshot;
 
   assert.deepEqual(snapshot.promptOverrides, []);
   assert.equal(next.promptOverrides.length, 1);
@@ -116,14 +122,22 @@ test("prompt overrides replace built-in templates and reject unsafe variables", 
 
   assert.throws(
     () =>
-      upsertPromptOverride(snapshot, {
-        templateId: "single-paper-chinese-summary",
-        template: "泄露 {{apiKey}}"
+      WorkbenchLocalStoreTransaction.upsertPromptOverrideTransaction({
+        snapshot,
+        overrideInput: {
+          templateId: "single-paper-chinese-summary",
+          template: "泄露 {{apiKey}}"
+        },
+        updatedAt: "2026-05-21T00:04:35.000Z"
       }),
     /apiKey is not allowed/
   );
 
-  const reset = removePromptOverride(next, "single-paper-chinese-summary");
+  const reset = WorkbenchLocalStoreTransaction.removePromptOverrideTransaction({
+    snapshot: next,
+    templateId: "single-paper-chinese-summary",
+    updatedAt: "2026-05-21T00:04:45.000Z"
+  }).snapshot;
   assert.deepEqual(reset.promptOverrides, []);
   assert.notEqual(
     resolvePromptTemplate("single-paper-chinese-summary", reset.promptOverrides).template,

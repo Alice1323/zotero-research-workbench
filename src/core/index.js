@@ -6,6 +6,9 @@ const {
   importWorkbenchZipExportPayload,
   redactSecretMaterial
 } = require("./workbenchSnapshot");
+const WorkbenchLocalStoreTransaction = require("./workbenchLocalStoreTransaction");
+const WorkbenchGraphReviewWorkflow = require("./graphReviewWorkflow");
+const WorkbenchResearchPanelOrchestrator = require("./researchPanelOrchestrator");
 
 const SAFE_TEMPLATE_VARIABLES = new Set([
   "selectedText",
@@ -543,6 +546,9 @@ module.exports = {
   BUILT_IN_PROMPT_TEMPLATES,
   SAFE_TEMPLATE_VARIABLES,
   SECRET_PLACEHOLDER,
+  WorkbenchGraphReviewWorkflow,
+  WorkbenchLocalStoreTransaction,
+  WorkbenchResearchPanelOrchestrator,
   WorkbenchLocalStore,
   buildWebDavDirectoryRequests,
   buildWebDavExportRequest,
@@ -555,8 +561,6 @@ module.exports = {
   importWorkbenchZipExportPayload,
   normalizeWebDavExportTarget,
   redactSecretMaterial,
-  removePromptOverride,
   resolvePromptTemplate,
-  upsertPromptOverride,
   renderPrompt
 };

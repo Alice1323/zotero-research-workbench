@@ -5,7 +5,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const packagedXpiPath = path.join(root, "dist", "zotero-research-workbench-0.2.0.xpi");
+const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
+const packagedXpiPath = path.join(root, "dist", `zotero-research-workbench-${manifest.version}.xpi`);
 
 test("build script exists and documents the runtime package boundary", () => {
   const scriptPath = path.join(root, "scripts", "build-xpi.ps1");
@@ -14,6 +15,10 @@ test("build script exists and documents the runtime package boundary", () => {
   const script = fs.readFileSync(scriptPath, "utf8");
   const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
   assert.match(script, /manifest\.json/);
+  assert.match(script, /ReadAllText/);
+  assert.match(script, /Encoding\]::UTF8/);
+  assert.match(script, /ConvertFrom-Json/);
+  assert.match(script, /\$Version = \$manifest\.version/);
   assert.match(script, /bootstrap\.js/);
   assert.match(script, /chrome\/content/);
   assert.match(script, /src\/core\/llmRuntimeGuard\.js/);
@@ -24,6 +29,12 @@ test("build script exists and documents the runtime package boundary", () => {
   assert.match(script, /workbenchSnapshot\.js/);
   assert.match(script, /src\/core\/workbenchRuntimeStore\.js/);
   assert.match(script, /workbenchRuntimeStore\.js/);
+  assert.match(script, /src\/core\/workbenchLocalStoreTransaction\.js/);
+  assert.match(script, /workbenchLocalStoreTransaction\.js/);
+  assert.match(script, /src\/core\/graphReviewWorkflow\.js/);
+  assert.match(script, /graphReviewWorkflow\.js/);
+  assert.match(script, /src\/core\/researchPanelOrchestrator\.js/);
+  assert.match(script, /researchPanelOrchestrator\.js/);
   assert.match(script, /src\/core\/zoteroNoteWriter\.js/);
   assert.match(script, /zoteroNoteWriter\.js/);
   assert.match(script, /src\/core\/webDavClient\.js/);
@@ -62,6 +73,9 @@ test(
     assert.match(listing, /chrome\/content\/workbenchFileIo\.js/);
     assert.match(listing, /chrome\/content\/workbenchSelectedPaper\.js/);
     assert.match(listing, /chrome\/content\/workbenchFetchRuntime\.js/);
+    assert.match(listing, /chrome\/content\/workbenchLocalStoreTransaction\.js/);
+    assert.match(listing, /chrome\/content\/graphReviewWorkflow\.js/);
+    assert.match(listing, /chrome\/content\/researchPanelOrchestrator\.js/);
 
     const panel = childProcess.execFileSync(
       "tar",
@@ -75,5 +89,24 @@ test(
     assert.ok(panel.indexOf("workbenchFileIo.js") < panel.indexOf("paperSummary.js"));
     assert.ok(panel.indexOf("workbenchSelectedPaper.js") < panel.indexOf("paperSummary.js"));
     assert.ok(panel.indexOf("workbenchFetchRuntime.js") < panel.indexOf("paperSummary.js"));
+    assert.ok(panel.indexOf("workbenchLocalStoreTransaction.js") < panel.indexOf("paperSummary.js"));
+    assert.ok(panel.indexOf("workbenchLocalStoreTransaction.js") < panel.indexOf("graphReviewWorkflow.js"));
+    assert.ok(panel.indexOf("graphReviewWorkflow.js") < panel.indexOf("paperSummary.js"));
+    assert.ok(panel.indexOf("graphReviewWorkflow.js") < panel.indexOf("researchPanelOrchestrator.js"));
+    assert.ok(panel.indexOf("researchPanelOrchestrator.js") < panel.indexOf("paperSummary.js"));
+
+    const packagedRuntime = childProcess.execFileSync(
+      "tar",
+      ["-xOf", packagedXpiPath, "chrome/content/paperSummary.js"],
+      { encoding: "utf8" }
+    );
+    const sourceRuntime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
+    assert.match(packagedRuntime, /WorkbenchResearchPanelOrchestrator/);
+    assert.match(packagedRuntime, /confirmDraftSavedToZoteroWorkflow/);
+    assert.doesNotMatch(packagedRuntime, /captureGraphSeedTransaction/);
+    assert.match(packagedRuntime, /upsertPromptOverrideTransaction/);
+    assert.match(packagedRuntime, /createGraphReviewReadModel/);
+    assert.match(packagedRuntime, /reviewGraphSeedWorkflow/);
+    assert.equal(packagedRuntime.replace(/\r\n/g, "\n"), sourceRuntime.replace(/\r\n/g, "\n"));
   }
 );
