@@ -9,7 +9,8 @@ const {
   createCurrentSelectionAiJobPlan,
   createManualResumeReadModel,
   pauseAiJob,
-  resumeAiJob
+  resumeAiJob,
+  runAiTaskQueue
 } = require("../src/core/aiTaskWorkspace");
 const core = require("../src/core");
 
@@ -23,6 +24,16 @@ function createPaper(key, title) {
     abstractNote: "Abstract",
     doi: `10.1000/${key.toLowerCase()}`
   };
+}
+
+async function waitForCondition(predicate, message) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (predicate()) {
+      return;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.fail(message);
 }
 
 test("core index exports ai task workspace module", () => {
@@ -135,4 +146,103 @@ test("createManualResumeReadModel lists paused and interrupted jobs without auto
   assert.equal(readModel.resumableJobs.length, 1);
   assert.equal(readModel.resumableJobs[0].id, "job-1");
   assert.equal(readModel.resumableJobs[0].autoResumeAllowed, false);
+});
+
+test("runAiTaskQueue respects provider concurrency limit and stores task results", async () => {
+  const plan = confirmAiJobPlan({
+    plan: createCurrentSelectionAiJobPlan({
+      requestText: "summarize",
+      selectedPapers: [createPaper("ITEM1", "A"), createPaper("ITEM2", "B"), createPaper("ITEM3", "C")],
+      provider: { id: "provider", model: "model" },
+      concurrencyLimit: 2,
+      createdAt: "2026-05-22T02:00:00.000Z"
+    }),
+    confirmedAt: "2026-05-22T02:01:00.000Z"
+  });
+  let active = 0;
+  let maxActive = 0;
+  const release = [];
+
+  const running = runAiTaskQueue({
+    job: plan.job,
+    tasks: plan.tasks,
+    executeTask: async (task) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => release.push(resolve));
+      active -= 1;
+      return { content: `summary:${task.source.zoteroItemKey}` };
+    },
+    now: () => "2026-05-22T02:02:00.000Z"
+  });
+
+  await Promise.resolve();
+  assert.equal(maxActive, 2);
+  release.splice(0).forEach((resolve) => resolve());
+  await waitForCondition(() => release.length > 0, "third task should be waiting for release");
+  release.splice(0).forEach((resolve) => resolve());
+  const result = await running;
+
+  assert.equal(result.job.state, AI_JOB_STATES.completed);
+  assert.equal(result.results.length, 3);
+  assert.deepEqual(result.results.map((entry) => entry.content), ["summary:ITEM1", "summary:ITEM2", "summary:ITEM3"]);
+});
+
+test("runAiTaskQueue retries recoverable failures twice then records a visible skip", async () => {
+  const plan = confirmAiJobPlan({
+    plan: createCurrentSelectionAiJobPlan({
+      requestText: "summarize",
+      selectedPapers: [createPaper("ITEM1", "A")],
+      provider: { id: "provider", model: "model" },
+      createdAt: "2026-05-22T02:10:00.000Z"
+    }),
+    confirmedAt: "2026-05-22T02:11:00.000Z"
+  });
+  let calls = 0;
+
+  const result = await runAiTaskQueue({
+    job: plan.job,
+    tasks: plan.tasks,
+    executeTask: async () => {
+      calls += 1;
+      const error = new Error("PDF unreadable");
+      error.code = "source-text-unreadable";
+      throw error;
+    },
+    now: () => "2026-05-22T02:12:00.000Z"
+  });
+
+  assert.equal(calls, 3);
+  assert.equal(result.job.state, AI_JOB_STATES.completedWithSkips);
+  assert.equal(result.tasks[0].state, AI_TASK_STATES.skipped);
+  assert.equal(result.skips[0].taskId, plan.tasks[0].id);
+  assert.match(result.skips[0].reason, /缺少可读文本/);
+});
+
+test("runAiTaskQueue pauses and diagnoses systemic provider failures", async () => {
+  const plan = confirmAiJobPlan({
+    plan: createCurrentSelectionAiJobPlan({
+      requestText: "summarize",
+      selectedPapers: [createPaper("ITEM1", "A"), createPaper("ITEM2", "B")],
+      provider: { id: "provider", model: "model" },
+      createdAt: "2026-05-22T02:20:00.000Z"
+    }),
+    confirmedAt: "2026-05-22T02:21:00.000Z"
+  });
+
+  const result = await runAiTaskQueue({
+    job: plan.job,
+    tasks: plan.tasks,
+    executeTask: async () => {
+      const error = new Error("bad key");
+      error.status = 401;
+      throw error;
+    },
+    now: () => "2026-05-22T02:22:00.000Z"
+  });
+
+  assert.equal(result.job.state, AI_JOB_STATES.paused);
+  assert.equal(result.job.resumeRequired, true);
+  assert.equal(result.diagnoses.length, 1);
+  assert.equal(result.diagnoses[0].reason, "systemic-provider-failure");
 });

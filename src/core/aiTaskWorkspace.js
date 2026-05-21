@@ -182,6 +182,147 @@ function createManualResumeReadModel({ aiJobs, aiTasks } = {}) {
   };
 }
 
+async function runAiTaskQueue({ job, tasks, executeTask, classifyFailure, now } = {}) {
+  if (typeof executeTask !== "function") {
+    throw new Error("AI Task Queue 缺少任务执行器");
+  }
+  const timestamp = typeof now === "function" ? now : () => new Date().toISOString();
+  const failureClassifier =
+    classifyFailure ||
+    ProviderRequestPolicy?.classifyProviderFailure ||
+    ((error) => ({
+      kind: "unknown-task-failure",
+      retryable: true,
+      skipAllowed: true,
+      userMessage: cleanText(error?.message) || "任务失败"
+    }));
+  const nextJob = { ...job, state: AI_JOB_STATES.running, startedAt: job?.startedAt || timestamp(), resumeRequired: false };
+  const nextTasks = tasks.map((task) => ({ ...task }));
+  const results = [];
+  const failures = [];
+  const skips = [];
+  const diagnoses = [];
+  const limit = normalizeProviderConcurrencyLimit(nextJob.providerConcurrencyLimit);
+  let cursor = 0;
+  let stopped = false;
+  let consecutiveFailures = 0;
+
+  async function worker() {
+    while (!stopped && cursor < nextTasks.length) {
+      const task = nextTasks[cursor];
+      cursor += 1;
+      if (task.state !== AI_TASK_STATES.queued && task.state !== AI_TASK_STATES.retrying) {
+        continue;
+      }
+      await runOneTask(task);
+    }
+  }
+
+  async function runOneTask(task) {
+    task.state = task.retryCount > 0 ? AI_TASK_STATES.retrying : AI_TASK_STATES.running;
+    task.startedAt = task.startedAt || timestamp();
+    try {
+      const output = await executeTask(task);
+      task.state = AI_TASK_STATES.succeeded;
+      task.completedAt = timestamp();
+      consecutiveFailures = 0;
+      results.push({
+        jobId: task.jobId,
+        taskId: task.id,
+        source: task.source,
+        inputScope: task.inputScope,
+        promptTemplateId: task.promptTemplateId,
+        providerId: task.providerId,
+        model: task.model,
+        status: "succeeded",
+        content: cleanText(output?.content),
+        createdAt: task.completedAt
+      });
+    } catch (error) {
+      const classified = failureClassifier(error);
+      consecutiveFailures += 1;
+      failures.push({
+        jobId: task.jobId,
+        taskId: task.id,
+        sourceTitle: task.source?.title || "",
+        failureKind: classified.kind,
+        errorReason: classified.userMessage,
+        retryCount: task.retryCount,
+        createdAt: timestamp()
+      });
+      if (classified.kind === "systemic-provider-failure") {
+        task.state = AI_TASK_STATES.failed;
+        task.errorReason = classified.userMessage;
+        stopped = true;
+        nextJob.state = AI_JOB_STATES.paused;
+        nextJob.resumeRequired = true;
+        diagnoses.push(
+          ProviderRequestPolicy.createJobFailureDiagnosis({
+            jobId: nextJob.id,
+            providerId: nextJob.provider?.id,
+            model: nextJob.provider?.model,
+            totalTasks: nextTasks.length,
+            failedTasks: failures,
+            createdAt: timestamp()
+          })
+        );
+        return;
+      }
+      if (classified.retryable && task.retryCount < task.maxRetries) {
+        task.retryCount += 1;
+        await runOneTask(task);
+        return;
+      }
+      if (classified.skipAllowed) {
+        task.state = AI_TASK_STATES.skipped;
+        task.completedAt = timestamp();
+        task.errorReason = classified.userMessage;
+        skips.push({
+          jobId: task.jobId,
+          taskId: task.id,
+          source: task.source,
+          reason: classified.userMessage,
+          retryCount: task.retryCount,
+          createdAt: task.completedAt
+        });
+        return;
+      }
+      task.state = AI_TASK_STATES.failed;
+      task.completedAt = timestamp();
+      task.errorReason = classified.userMessage;
+      if (
+        ProviderRequestPolicy?.shouldTriggerJobFailureDiagnosis?.({
+          totalTasks: nextTasks.length,
+          failureCount: failures.length,
+          consecutiveFailures,
+          latestFailureKind: classified.kind
+        })
+      ) {
+        stopped = true;
+        nextJob.state = AI_JOB_STATES.paused;
+        nextJob.resumeRequired = true;
+        diagnoses.push(
+          ProviderRequestPolicy.createJobFailureDiagnosis({
+            jobId: nextJob.id,
+            providerId: nextJob.provider?.id,
+            model: nextJob.provider?.model,
+            totalTasks: nextTasks.length,
+            failedTasks: failures,
+            createdAt: timestamp()
+          })
+        );
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, nextTasks.length) }, () => worker()));
+  if (nextJob.state === AI_JOB_STATES.running) {
+    nextJob.state = skips.length ? AI_JOB_STATES.completedWithSkips : AI_JOB_STATES.completed;
+    nextJob.completedAt = timestamp();
+  }
+  return { job: nextJob, tasks: nextTasks, results, failures, skips, diagnoses };
+}
+
 function normalizeTasks(tasks) {
   return Array.isArray(tasks) ? clonePlain(tasks) : [];
 }
@@ -210,7 +351,8 @@ const WorkbenchAiTaskWorkspace = {
   createCurrentSelectionAiJobPlan,
   createManualResumeReadModel,
   pauseAiJob,
-  resumeAiJob
+  resumeAiJob,
+  runAiTaskQueue
 };
 
 if (typeof module !== "undefined" && module.exports) {
