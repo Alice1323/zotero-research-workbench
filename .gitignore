@@ -1,7 +1,12 @@
 dist/*.xpi
 dist/*.json
 dist/*.zip
+dist/*.bak
+dist/*.xpi.*
 dist/package/
 node_modules/
 tmp/
 *.log
+
+# Local architecture audit scratch notes.
+.scratch/architecture-debt/V0.21*.md
