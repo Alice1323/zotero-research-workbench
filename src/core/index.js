@@ -9,6 +9,7 @@ const {
 const WorkbenchLocalStoreTransaction = require("./workbenchLocalStoreTransaction");
 const WorkbenchGraphReviewWorkflow = require("./graphReviewWorkflow");
 const WorkbenchResearchPanelOrchestrator = require("./researchPanelOrchestrator");
+const WorkbenchProviderRequestPolicy = require("./providerRequestPolicy");
 
 const SAFE_TEMPLATE_VARIABLES = new Set([
   "selectedText",
@@ -548,6 +549,7 @@ module.exports = {
   SECRET_PLACEHOLDER,
   WorkbenchGraphReviewWorkflow,
   WorkbenchLocalStoreTransaction,
+  WorkbenchProviderRequestPolicy,
   WorkbenchResearchPanelOrchestrator,
   WorkbenchLocalStore,
   buildWebDavDirectoryRequests,
