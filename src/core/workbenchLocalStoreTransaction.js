@@ -271,6 +271,143 @@ function replaceWorkbenchSnapshotFromImportTransaction({ snapshot, importedAt, s
   };
 }
 
+function createAiJobPlanTransaction({ snapshot, plan, createdAt } = {}) {
+  const timestamp = cleanText(createdAt) || new Date().toISOString();
+  const next = normalizeTransactionSnapshot(snapshot);
+  const job = clonePlain(plan?.job);
+  const tasks = Array.isArray(plan?.tasks) ? plan.tasks.map((task) => clonePlain(task)) : [];
+  if (!cleanText(job.id)) {
+    throw new Error("AI Job id 不能为空");
+  }
+
+  next.aiJobs = next.aiJobs.filter((entry) => cleanText(entry?.id) !== job.id);
+  next.aiJobs.push(job);
+  next.aiTasks = next.aiTasks.filter((entry) => cleanText(entry?.jobId) !== job.id);
+  next.aiTasks.push(...tasks);
+  next.taskLedger.push({
+    id: `task-${job.id}-create-ai-job-plan`,
+    workflowStep: "create-ai-job-plan",
+    state: "completed",
+    providerId: cleanText(job.provider?.id) || null,
+    promptTaskTemplateId: null,
+    outputLocation: { aiJobId: job.id },
+    errorNotice: null,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    provenance: { source: "explicit-user-action", writeTarget: "local-snapshot-only" }
+  });
+  next.exportedAt = timestamp;
+  return { status: "ai-job-plan-created", jobId: job.id, snapshot: next };
+}
+
+function confirmAiJobPlanTransaction({ snapshot, jobId, confirmedAt } = {}) {
+  const timestamp = cleanText(confirmedAt) || new Date().toISOString();
+  const normalizedJobId = cleanText(jobId);
+  const next = normalizeTransactionSnapshot(snapshot);
+  const job = next.aiJobs.find((entry) => cleanText(entry?.id) === normalizedJobId);
+  if (!job) {
+    throw new Error(`AI Job 不存在：${normalizedJobId}`);
+  }
+
+  job.state = "confirmed";
+  job.confirmedAt = timestamp;
+  job.resumeRequired = false;
+  next.taskLedger.push({
+    id: `task-${normalizedJobId}-confirm-ai-job-plan-${createStableTimestamp(timestamp)}`,
+    workflowStep: "confirm-ai-job-plan",
+    state: "completed",
+    providerId: cleanText(job.provider?.id) || null,
+    promptTaskTemplateId: null,
+    outputLocation: { aiJobId: normalizedJobId },
+    errorNotice: null,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    provenance: { source: "explicit-user-action", writeTarget: "local-snapshot-only" }
+  });
+  next.exportedAt = timestamp;
+  return { status: "ai-job-confirmed", jobId: normalizedJobId, snapshot: next };
+}
+
+function recordAiTaskQueueResultTransaction({ snapshot, queueResult, recordedAt } = {}) {
+  const timestamp = cleanText(recordedAt) || new Date().toISOString();
+  const next = normalizeTransactionSnapshot(snapshot);
+  const job = clonePlain(queueResult?.job);
+  if (!cleanText(job.id)) {
+    throw new Error("AI Job id 不能为空");
+  }
+
+  upsertRecordById(next.aiJobs, job);
+  for (const task of Array.isArray(queueResult?.tasks) ? queueResult.tasks : []) {
+    upsertRecordById(next.aiTasks, clonePlain(task));
+  }
+  next.aiTaskResults.push(...cloneArray(queueResult?.results));
+  next.aiTaskFailures.push(...cloneArray(queueResult?.failures));
+  next.aiTaskSkips.push(...cloneArray(queueResult?.skips));
+  next.aiJobDiagnoses.push(...cloneArray(queueResult?.diagnoses));
+  next.taskLedger.push({
+    id: `task-${job.id}-run-ai-task-queue-${createStableTimestamp(timestamp)}`,
+    workflowStep: "run-ai-task-queue",
+    state: "completed",
+    providerId: cleanText(job.provider?.id) || null,
+    promptTaskTemplateId: null,
+    outputLocation: {
+      aiJobId: job.id,
+      resultCount: cloneArray(queueResult?.results).length,
+      failureCount: cloneArray(queueResult?.failures).length,
+      skipCount: cloneArray(queueResult?.skips).length,
+      diagnosisCount: cloneArray(queueResult?.diagnoses).length
+    },
+    errorNotice: null,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    provenance: { source: "ai-task-queue", writeTarget: "local-snapshot-only" }
+  });
+  next.exportedAt = timestamp;
+  return { status: "ai-task-queue-recorded", jobId: job.id, snapshot: next };
+}
+
+function markRunningAiJobsForManualResumeTransaction({ snapshot, interruptedAt } = {}) {
+  const timestamp = cleanText(interruptedAt) || new Date().toISOString();
+  const next = normalizeTransactionSnapshot(snapshot);
+  const affectedJobIds = new Set();
+  for (const job of next.aiJobs) {
+    if (cleanText(job?.state) === "running") {
+      job.state = "paused";
+      job.resumeRequired = true;
+      job.interruptedAt = timestamp;
+      affectedJobIds.add(cleanText(job.id));
+    }
+  }
+
+  for (const task of next.aiTasks) {
+    if (affectedJobIds.has(cleanText(task?.jobId)) && cleanText(task?.state) === "running") {
+      task.state = "queued";
+      task.resumeRequired = true;
+    }
+  }
+
+  if (affectedJobIds.size) {
+    next.taskLedger.push({
+      id: `task-ai-jobs-manual-resume-${createStableTimestamp(timestamp)}`,
+      workflowStep: "mark-ai-jobs-for-manual-resume",
+      state: "completed",
+      providerId: null,
+      promptTaskTemplateId: null,
+      outputLocation: { aiJobIds: [...affectedJobIds] },
+      errorNotice: null,
+      startedAt: timestamp,
+      completedAt: timestamp,
+      provenance: { source: "research-panel-restart", writeTarget: "local-snapshot-only" }
+    });
+  }
+  next.exportedAt = timestamp;
+  return {
+    status: "ai-jobs-marked-for-manual-resume",
+    jobIds: [...affectedJobIds],
+    snapshot: next
+  };
+}
+
 function normalizeTransactionSnapshot(snapshot) {
   const input = {
     schemaVersion: 1,
@@ -292,7 +429,13 @@ function normalizeTransactionSnapshot(snapshot) {
     researchNoteDrafts: Array.isArray(input.researchNoteDrafts) ? input.researchNoteDrafts : [],
     graphSeeds: Array.isArray(input.graphSeeds) ? input.graphSeeds : [],
     citationRelations: Array.isArray(input.citationRelations) ? input.citationRelations : [],
-    taskLedger: Array.isArray(input.taskLedger) ? input.taskLedger : []
+    taskLedger: Array.isArray(input.taskLedger) ? input.taskLedger : [],
+    aiJobs: Array.isArray(input.aiJobs) ? input.aiJobs : [],
+    aiTasks: Array.isArray(input.aiTasks) ? input.aiTasks : [],
+    aiTaskResults: Array.isArray(input.aiTaskResults) ? input.aiTaskResults : [],
+    aiTaskFailures: Array.isArray(input.aiTaskFailures) ? input.aiTaskFailures : [],
+    aiTaskSkips: Array.isArray(input.aiTaskSkips) ? input.aiTaskSkips : [],
+    aiJobDiagnoses: Array.isArray(input.aiJobDiagnoses) ? input.aiJobDiagnoses : []
   };
 }
 
@@ -346,16 +489,37 @@ function createStableTimestamp(value) {
   return value.replace(/[^0-9A-Za-z]+/g, "-").replace(/-$/, "");
 }
 
+function upsertRecordById(records, record) {
+  const id = cleanText(record?.id);
+  if (!id) {
+    return;
+  }
+  const index = records.findIndex((entry) => cleanText(entry?.id) === id);
+  if (index >= 0) {
+    records[index] = record;
+  } else {
+    records.push(record);
+  }
+}
+
+function cloneArray(value) {
+  return Array.isArray(value) ? value.map((entry) => clonePlain(entry)) : [];
+}
+
 function clonePlain(value) {
   return JSON.parse(JSON.stringify(value || {}));
 }
 
 const WorkbenchLocalStoreTransaction = {
   captureGraphSeedTransaction,
+  confirmAiJobPlanTransaction,
   confirmResearchNoteDraftSavedToZoteroTransaction,
+  createAiJobPlanTransaction,
   createResearchNoteDraftTransaction,
+  markRunningAiJobsForManualResumeTransaction,
   removePromptOverrideTransaction,
   promoteGraphSeedTransaction,
+  recordAiTaskQueueResultTransaction,
   replaceWorkbenchSnapshotFromImportTransaction,
   reviewGraphSeedTransaction,
   upsertPromptOverrideTransaction

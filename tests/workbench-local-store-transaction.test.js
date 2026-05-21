@@ -3,10 +3,14 @@ const assert = require("node:assert/strict");
 
 const {
   captureGraphSeedTransaction,
+  confirmAiJobPlanTransaction,
   confirmResearchNoteDraftSavedToZoteroTransaction,
+  createAiJobPlanTransaction,
   createResearchNoteDraftTransaction,
+  markRunningAiJobsForManualResumeTransaction,
   removePromptOverrideTransaction,
   promoteGraphSeedTransaction,
+  recordAiTaskQueueResultTransaction,
   replaceWorkbenchSnapshotFromImportTransaction,
   reviewGraphSeedTransaction,
   upsertPromptOverrideTransaction
@@ -188,4 +192,97 @@ test("replaceWorkbenchSnapshotFromImportTransaction normalizes imported snapshot
   assert.deepEqual(result.snapshot.promptOverrides, []);
   assert.deepEqual(result.snapshot.providerProvenance, []);
   assert.equal(result.snapshot.researchNoteDrafts.length, 1);
+});
+
+test("createAiJobPlanTransaction stores draft job plan and task records", () => {
+  const result = createAiJobPlanTransaction({
+    snapshot: { schemaVersion: 1, exportedAt: "old", aiJobs: [], aiTasks: [], taskLedger: [] },
+    plan: {
+      job: { id: "job-1", state: "draft", requestText: "summarize" },
+      tasks: [{ id: "task-1", jobId: "job-1", state: "queued" }]
+    },
+    createdAt: "2026-05-22T03:00:00.000Z"
+  });
+
+  assert.equal(result.status, "ai-job-plan-created");
+  assert.equal(result.snapshot.aiJobs.length, 1);
+  assert.equal(result.snapshot.aiTasks.length, 1);
+  assert.equal(result.snapshot.taskLedger.at(-1).workflowStep, "create-ai-job-plan");
+});
+
+test("confirmAiJobPlanTransaction marks draft job confirmed", () => {
+  const result = confirmAiJobPlanTransaction({
+    snapshot: {
+      schemaVersion: 1,
+      exportedAt: "old",
+      aiJobs: [{ id: "job-1", state: "draft" }],
+      aiTasks: [{ id: "task-1", jobId: "job-1", state: "queued" }],
+      taskLedger: []
+    },
+    jobId: "job-1",
+    confirmedAt: "2026-05-22T03:01:00.000Z"
+  });
+
+  assert.equal(result.status, "ai-job-confirmed");
+  assert.equal(result.snapshot.aiJobs[0].state, "confirmed");
+  assert.equal(result.snapshot.aiJobs[0].confirmedAt, "2026-05-22T03:01:00.000Z");
+  assert.equal(result.snapshot.taskLedger.at(-1).workflowStep, "confirm-ai-job-plan");
+});
+
+test("recordAiTaskQueueResultTransaction stores results failures skips and diagnosis", () => {
+  const result = recordAiTaskQueueResultTransaction({
+    snapshot: {
+      schemaVersion: 1,
+      exportedAt: "old",
+      aiJobs: [{ id: "job-1", state: "confirmed" }],
+      aiTasks: [{ id: "task-1", jobId: "job-1", state: "queued" }],
+      aiTaskResults: [],
+      aiTaskFailures: [],
+      aiTaskSkips: [],
+      aiJobDiagnoses: [],
+      taskLedger: []
+    },
+    queueResult: {
+      job: { id: "job-1", state: "completed-with-skips" },
+      tasks: [{ id: "task-1", jobId: "job-1", state: "skipped" }],
+      results: [],
+      failures: [{ taskId: "task-1", jobId: "job-1", errorReason: "missing text" }],
+      skips: [{ taskId: "task-1", jobId: "job-1", reason: "missing text" }],
+      diagnoses: [{ id: "diagnosis-1", jobId: "job-1", reason: "task-failure-threshold" }]
+    },
+    recordedAt: "2026-05-22T03:02:00.000Z"
+  });
+
+  assert.equal(result.status, "ai-task-queue-recorded");
+  assert.equal(result.snapshot.aiJobs[0].state, "completed-with-skips");
+  assert.equal(result.snapshot.aiTasks[0].state, "skipped");
+  assert.equal(result.snapshot.aiTaskFailures.length, 1);
+  assert.equal(result.snapshot.aiTaskSkips.length, 1);
+  assert.equal(result.snapshot.aiJobDiagnoses.length, 1);
+  assert.equal(result.snapshot.taskLedger.at(-1).workflowStep, "run-ai-task-queue");
+});
+
+test("markRunningAiJobsForManualResumeTransaction pauses interrupted jobs without auto resume", () => {
+  const result = markRunningAiJobsForManualResumeTransaction({
+    snapshot: {
+      schemaVersion: 1,
+      exportedAt: "old",
+      aiJobs: [
+        { id: "job-1", state: "running", resumeRequired: false },
+        { id: "job-2", state: "completed", resumeRequired: false }
+      ],
+      aiTasks: [
+        { id: "task-1", jobId: "job-1", state: "running" },
+        { id: "task-2", jobId: "job-2", state: "succeeded" }
+      ],
+      taskLedger: []
+    },
+    interruptedAt: "2026-05-22T03:03:00.000Z"
+  });
+
+  assert.equal(result.status, "ai-jobs-marked-for-manual-resume");
+  assert.equal(result.snapshot.aiJobs[0].state, "paused");
+  assert.equal(result.snapshot.aiJobs[0].resumeRequired, true);
+  assert.equal(result.snapshot.aiTasks[0].state, "queued");
+  assert.equal(result.snapshot.aiJobs[1].state, "completed");
 });
