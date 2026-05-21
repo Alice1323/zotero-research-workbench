@@ -752,3 +752,26 @@ test("segmented filters refresh their owning read-only views", () => {
   assert.match(runtime, /case "citation-graph-scope-filter":\s*renderCitationGraphInspector\(\)/);
   assert.match(runtime, /case "citation-graph-quality-filter":\s*renderCitationGraphInspector\(\)/);
 });
+
+test("ai task workspace runtime wires plan confirmation queue controls and persistence", () => {
+  const panel = fs.readFileSync(path.join(root, "chrome/content/researchPanel.xhtml"), "utf8");
+  const runtime = fs.readFileSync(path.join(root, "chrome/content/aiTaskWorkspace.js"), "utf8");
+
+  assert.match(panel, /aiTaskWorkspaceCore\.js/);
+  assert.match(panel, /providerRequestPolicy\.js/);
+  assert.match(panel, /aiTaskWorkspace\.js/);
+  assert.ok(panel.indexOf("providerRequestPolicy.js") < panel.indexOf("aiTaskWorkspaceCore.js"));
+  assert.ok(panel.indexOf("aiTaskWorkspaceCore.js") < panel.indexOf("aiTaskWorkspace.js"));
+  assert.ok(panel.indexOf("aiTaskWorkspace.js") < panel.indexOf("paperSummary.js"));
+  assert.match(runtime, /WorkbenchAiTaskWorkspace/);
+  assert.match(runtime, /createDraftAiJobPlan/);
+  assert.match(runtime, /confirmAndRunAiJob/);
+  assert.match(runtime, /pauseCurrentAiJob/);
+  assert.match(runtime, /resumeCurrentAiJob/);
+  assert.match(runtime, /cancelCurrentAiJob/);
+  assert.match(runtime, /runOpenAICompatibleSummaryTask/);
+  assert.match(runtime, /ResearchPanelOrchestrator\.createAiTaskWorkspacePlanWorkflow/);
+  assert.match(runtime, /ResearchPanelOrchestrator\.confirmAiTaskWorkspacePlanWorkflow/);
+  assert.match(runtime, /ResearchPanelOrchestrator\.recordAiTaskWorkspaceQueueResultWorkflow/);
+  assert.doesNotMatch(runtime, /confirmAndRunAiJob\(\);/);
+});
