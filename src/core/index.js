@@ -10,6 +10,7 @@ const WorkbenchLocalStoreTransaction = require("./workbenchLocalStoreTransaction
 const WorkbenchGraphReviewWorkflow = require("./graphReviewWorkflow");
 const WorkbenchResearchPanelOrchestrator = require("./researchPanelOrchestrator");
 const WorkbenchProviderRequestPolicy = require("./providerRequestPolicy");
+const WorkbenchAiTaskWorkspace = require("./aiTaskWorkspace");
 
 const SAFE_TEMPLATE_VARIABLES = new Set([
   "selectedText",
@@ -547,6 +548,7 @@ module.exports = {
   BUILT_IN_PROMPT_TEMPLATES,
   SAFE_TEMPLATE_VARIABLES,
   SECRET_PLACEHOLDER,
+  WorkbenchAiTaskWorkspace,
   WorkbenchGraphReviewWorkflow,
   WorkbenchLocalStoreTransaction,
   WorkbenchProviderRequestPolicy,
