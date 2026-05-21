@@ -2,7 +2,7 @@
 
 ## Scope
 
-This slice creates the first runnable scaffold for Zotero Research Workbench at `C:\Users\44199\水银灯的书库\水银灯的代码库\归档项目\zotero-ai-literature-assistant-v1`.
+This slice creates the first runnable scaffold for Zotero Research Workbench at `C:\Users\44199\水银灯的书库\水银灯的代码库\归档项目\zotero-research-workbench`.
 
 It focuses on the smallest useful vertical path:
 

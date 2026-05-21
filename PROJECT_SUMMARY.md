@@ -4,6 +4,8 @@
 
 当前主代码项目。实际产品名是 Zotero Research Workbench / Zotero 研究工作台，是面向 Zotero 8/9 的中文研究工作流插件。
 
+GitHub 仓库名：`Alice1323/zotero-research-workbench`。
+
 ## 当前状态
 
 - `v0.2.0` 已作为稳定版本保留并发布。
