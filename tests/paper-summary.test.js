@@ -1,5 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
 
 const {
   buildChineseReadingContextTranslationPrompt,
@@ -19,6 +22,14 @@ const {
   requestPaperSummary,
   selectBestPdfAttachment
 } = require("../src/core/paperSummary");
+
+const {
+  assertLlmRuntimeRequestAllowed: assertGuardRequestAllowed,
+  createLlmRuntimeGuard: createSharedLlmRuntimeGuard,
+  estimatePromptTokens: estimateSharedPromptTokens
+} = require("../src/core/llmRuntimeGuard");
+
+const root = path.resolve(__dirname, "..");
 
 test("normalizePaperContext formats Zotero item metadata without mutating source item", () => {
   const item = {
@@ -284,6 +295,80 @@ test("requestPaperSummary blocks prompts over the max input token limit before f
   );
 
   assert.equal(fetchCalled, false);
+});
+
+test("LLM runtime guard module blocks oversized prompts before provider access", () => {
+  assert.throws(
+    () =>
+      assertGuardRequestAllowed({
+        prompt: "长".repeat(1300),
+        settings: { maxInputTokensPerTask: 1000 },
+        taskType: "single-paper-chinese-summary"
+      }),
+    (error) => {
+      assert.equal(error.name, "LlmRuntimeGuardError");
+      assert.equal(error.message, "输入内容超过单任务 Token 上限");
+      assert.equal(error.taskType, "single-paper-chinese-summary");
+      assert.ok(error.estimatedTokens > error.maxInputTokensPerTask);
+      return true;
+    }
+  );
+});
+
+test("LLM runtime guard module exposes shared limiter and token estimator", () => {
+  let now = 1_000_000;
+  const runtimeGuard = createSharedLlmRuntimeGuard({ now: () => now });
+
+  assert.equal(estimateSharedPromptTokens("测试 text"), 3);
+  assert.deepEqual(
+    runtimeGuard.assertRequestAllowed({
+      taskType: "single-paper-chinese-summary",
+      requestsPerMinute: 1
+    }),
+    {
+      requestsInWindow: 1,
+      requestsPerMinute: 1,
+      windowMs: 60_000
+    }
+  );
+
+  assert.throws(
+    () =>
+      runtimeGuard.assertRequestAllowed({
+        taskType: "reading-context-chinese-translation",
+        requestsPerMinute: 1
+      }),
+    /请求过于频繁，请稍后再试/
+  );
+
+  now += 60_001;
+  assert.equal(
+    runtimeGuard.assertRequestAllowed({
+      taskType: "reading-context-chinese-translation",
+      requestsPerMinute: 1
+    }).requestsInWindow,
+    1
+  );
+});
+
+test("LLM runtime guard module exposes the same interface to browser runtime scripts", () => {
+  const source = fs.readFileSync(path.join(root, "src/core/llmRuntimeGuard.js"), "utf8");
+  const context = {
+    Date,
+    Error,
+    Math,
+    Number,
+    Object,
+    RegExp,
+    String,
+    window: {}
+  };
+
+  vm.runInNewContext(source, context, { filename: "llmRuntimeGuard.js" });
+
+  assert.equal(typeof context.window.WorkbenchLlmRuntimeGuard.createLlmRuntimeGuard, "function");
+  assert.equal(typeof context.window.WorkbenchLlmRuntimeGuard.assertLlmRuntimeRequestAllowed, "function");
+  assert.equal(context.window.WorkbenchLlmRuntimeGuard.estimatePromptTokens("测试 text"), 3);
 });
 
 test("buildChineseReadingContextTranslationPrompt requests faithful Chinese translation of selected text", () => {

@@ -227,6 +227,10 @@
   function createProviderConnectionFailure(result, settings) {
     const error = new Error(result?.message || "测试连接失败");
     error.operation = "provider connection test failed";
+    error.userMessage = result?.message || "测试连接失败";
+    if (result?.details) {
+      error.technicalDetail = result.details;
+    }
     error.settings = settings;
     return error;
   }
@@ -257,7 +261,7 @@
   }
 
   function createLayeredErrorNotice(error, fallbackMessage = "操作失败") {
-    const rawUserMessage = cleanString(error?.message) || cleanString(fallbackMessage) || "操作失败";
+    const rawUserMessage = cleanString(error?.userMessage) || cleanString(error?.message) || cleanString(fallbackMessage) || "操作失败";
     const userMessage = sanitizeSecretText(rawUserMessage) || cleanString(fallbackMessage) || "操作失败";
     const technicalDetail = sanitizeSecretText(formatTechnicalErrorDetail(error) || rawUserMessage).slice(0, 4000);
     return {
@@ -275,6 +279,9 @@
     }
 
     const parts = [];
+    if (cleanString(error.technicalDetail)) {
+      parts.push(error.technicalDetail);
+    }
     if (error.name) {
       parts.push(`name: ${error.name}`);
     }
@@ -287,6 +294,9 @@
 
     const metadata = {};
     for (const key of Object.keys(error)) {
+      if (key === "technicalDetail") {
+        continue;
+      }
       metadata[key] = error[key];
     }
     if (Object.keys(metadata).length) {

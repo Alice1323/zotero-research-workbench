@@ -1,7 +1,13 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { testOpenAICompatibleConnection } = require("../src/core/providerConnection");
+const providerConnection = require("../src/core/providerConnection");
+const { testOpenAICompatibleConnection } = providerConnection;
+
+test("provider connection module leaves OpenAI request construction to provider chat completion module", () => {
+  assert.equal(providerConnection.buildChatCompletionsUrl, undefined);
+  assert.equal(providerConnection.buildModelsUrl, undefined);
+});
 
 test("connection test sends minimal OpenAI-compatible request and returns Chinese success", async () => {
   const calls = [];
@@ -59,13 +65,14 @@ test("connection test maps auth, model, network, and timeout failures to Chinese
     { ok: false, message: "API 密钥无效" }
   );
 
-  assert.deepEqual(
-    await testOpenAICompatibleConnection(
+  const modelErrorResult = await testOpenAICompatibleConnection(
       { baseUrl: "https://api.example.test/v1", apiKey: "sk-secret", model: "bad-model" },
       { fetch: async () => ({ ok: false, status: 404, text: async () => "model not found" }) }
-    ),
-    { ok: false, message: "模型不可用" }
   );
+  assert.equal(modelErrorResult.ok, false);
+  assert.equal(modelErrorResult.message, "模型不可用");
+  assert.match(modelErrorResult.details, /provider response HTTP 404/);
+  assert.match(modelErrorResult.details, /model not found/);
 
   assert.deepEqual(
     await testOpenAICompatibleConnection(
@@ -169,7 +176,46 @@ test("connection test rejects model when chat response explicitly reports model 
     }
   );
 
-  assert.deepEqual(result, { ok: false, message: "模型不可用" });
+  assert.equal(result.ok, false);
+  assert.equal(result.message, "模型不可用");
+  assert.match(result.details, /provider response HTTP 400/);
+  assert.match(result.details, /definitely-not-a-real-model/);
+});
+
+test("connection test reports model unavailable when listed models exclude it and chat returns generic provider error", async () => {
+  const result = await testOpenAICompatibleConnection(
+    {
+      baseUrl: "https://api.example.test/v1",
+      apiKey: "sk-secret",
+      model: "wrong-model-name"
+    },
+    {
+      fetch: async (url) => {
+        if (url.endsWith("/models")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ data: [{ id: "moonshot-v1" }, { id: "deepseek-chat" }] })
+          };
+        }
+        return {
+          ok: false,
+          status: 503,
+          text: async () => JSON.stringify({
+            error: {
+              message: "Service temporarily unavailable",
+              type: "api_error"
+            }
+          })
+        };
+      }
+    }
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.message, "模型不可用");
+  assert.match(result.details, /provider response HTTP 503/);
+  assert.match(result.details, /Service temporarily unavailable/);
 });
 
 test("connection test can pass when /models endpoint is unsupported but chat succeeds", async () => {
@@ -234,6 +280,44 @@ test("connection test rejects HTTP 200 responses without OpenAI chat completion 
     ok: false,
     message: "接口返回格式不是 OpenAI 兼容响应，请检查接口地址"
   });
+});
+
+test("connection test keeps provider response details for generic HTTP failures", async () => {
+  const result = await testOpenAICompatibleConnection(
+    {
+      baseUrl: "https://api.example.test/v1",
+      apiKey: "sk-secret",
+      model: "moonshot-v1"
+    },
+    {
+      fetch: async (url) => {
+        if (url.endsWith("/models")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ data: [{ id: "moonshot-v1" }] })
+          };
+        }
+        return {
+          ok: false,
+          status: 503,
+          text: async () => JSON.stringify({
+            error: {
+              message: "upstream overloaded for bearer sk-secret",
+              type: "server_overloaded"
+            }
+          })
+        };
+      }
+    }
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.message, "连接失败（HTTP 503）");
+  assert.match(result.details, /HTTP 503/);
+  assert.match(result.details, /upstream overloaded/);
+  assert.match(result.details, /server_overloaded/);
+  assert.doesNotMatch(result.details, /sk-secret/);
 });
 
 test("connection test uses timeout from provider settings when no option override is supplied", async () => {

@@ -47,7 +47,7 @@ npm run check
 npm run package
 ```
 
-The package command writes `dist/zotero-research-workbench-0.1.0.xpi`.
+The package command writes `dist/zotero-research-workbench-0.2.0.xpi`.
 
 ## First Release QA
 
@@ -64,7 +64,7 @@ Manual or UI installation is still required for the active Zotero profile becaus
 
 ```text
 id: zotero-research-workbench@local
-version: 0.1.0
+version: 0.2.0
 active: True
 userDisabled: False
 appDisabled: False

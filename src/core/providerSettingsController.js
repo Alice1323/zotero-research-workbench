@@ -213,6 +213,10 @@ function hasStoredValue(value) {
 function createProviderConnectionFailure(result, settings) {
   const error = new Error(result?.message || "测试连接失败");
   error.operation = "provider connection test failed";
+  error.userMessage = result?.message || "测试连接失败";
+  if (result?.details) {
+    error.technicalDetail = result.details;
+  }
   error.settings = settings;
   return error;
 }

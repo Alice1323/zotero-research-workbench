@@ -11,7 +11,83 @@
     webdavPassword: "extensions.zotero-research-workbench.webdav.password",
     webdavRemoteDirectory: "extensions.zotero-research-workbench.webdav.remoteDirectory"
   };
-  const SECRET_PLACEHOLDER = "<redacted>";
+  const WorkbenchSnapshot = window.WorkbenchSnapshot;
+  if (!WorkbenchSnapshot) {
+    throw new Error("WorkbenchSnapshot runtime Module is unavailable");
+  }
+  const {
+    SECRET_PLACEHOLDER,
+    createWorkbenchExportPackage,
+    createWorkbenchZipExportPayload,
+    importWorkbenchExportPackage,
+    importWorkbenchZipExportPayload,
+    redactSecretMaterial
+  } = WorkbenchSnapshot;
+  const WorkbenchProviderChatCompletion = window.WorkbenchProviderChatCompletion;
+  if (!WorkbenchProviderChatCompletion) {
+    throw new Error("WorkbenchProviderChatCompletion runtime Module is unavailable");
+  }
+  const { parseChatCompletionText, requestOpenAICompatibleChatCompletion } = WorkbenchProviderChatCompletion;
+  const WorkbenchRuntimeStore = window.WorkbenchRuntimeStore;
+  if (!WorkbenchRuntimeStore) {
+    throw new Error("WorkbenchRuntimeStore runtime Module is unavailable");
+  }
+  const { createWorkbenchRuntimeStore } = WorkbenchRuntimeStore;
+  const WorkbenchLlmRuntimeGuardModule = window.WorkbenchLlmRuntimeGuard;
+  if (!WorkbenchLlmRuntimeGuardModule) {
+    throw new Error("WorkbenchLlmRuntimeGuard runtime Module is unavailable");
+  }
+  const {
+    assertLlmRuntimeRequestAllowed,
+    createLlmRuntimeGuard,
+    estimatePromptTokens
+  } = WorkbenchLlmRuntimeGuardModule;
+  const WorkbenchZoteroNoteWriter = window.WorkbenchZoteroNoteWriter;
+  if (!WorkbenchZoteroNoteWriter) {
+    throw new Error("WorkbenchZoteroNoteWriter runtime Module is unavailable");
+  }
+  const { writeZoteroChildNote } = WorkbenchZoteroNoteWriter;
+  const WorkbenchWebDavClient = window.WorkbenchWebDavClient;
+  if (!WorkbenchWebDavClient) {
+    throw new Error("WorkbenchWebDavClient runtime Module is unavailable");
+  }
+  const { createWebDavClient } = WorkbenchWebDavClient;
+  const WorkbenchFetchRuntime = window.WorkbenchFetchRuntime;
+  if (!WorkbenchFetchRuntime) {
+    throw new Error("WorkbenchFetchRuntime runtime Module is unavailable");
+  }
+  const { createBrowserFetchRuntime } = WorkbenchFetchRuntime;
+  const { fetch: workbenchFetch } = createBrowserFetchRuntime({ window });
+  const { requestWebDav } = createWebDavClient({ fetchImpl: workbenchFetch });
+  const WorkbenchClipboardWriter = window.WorkbenchClipboardWriter;
+  if (!WorkbenchClipboardWriter) {
+    throw new Error("WorkbenchClipboardWriter runtime Module is unavailable");
+  }
+  const { createBrowserClipboardWriter } = WorkbenchClipboardWriter;
+  const { writeClipboardText } = createBrowserClipboardWriter({
+    navigator,
+    document,
+    createElement: createHtmlElement
+  });
+  const WorkbenchFileRuntime = window.WorkbenchFileRuntime;
+  if (!WorkbenchFileRuntime) {
+    throw new Error("WorkbenchFileRuntime runtime Module is unavailable");
+  }
+  const { createWorkbenchFileRuntime } = WorkbenchFileRuntime;
+  const WorkbenchFileIo = window.WorkbenchFileIo;
+  if (!WorkbenchFileIo) {
+    throw new Error("WorkbenchFileIo runtime Module is unavailable");
+  }
+  const { createBrowserWorkbenchFileIo } = WorkbenchFileIo;
+  const WorkbenchSelectedPaperRuntime = window.WorkbenchSelectedPaperRuntime;
+  if (!WorkbenchSelectedPaperRuntime) {
+    throw new Error("WorkbenchSelectedPaperRuntime runtime Module is unavailable");
+  }
+  const {
+    createBrowserSelectedPaperRuntime,
+    normalizePaperContext,
+    selectBestPdfAttachment
+  } = WorkbenchSelectedPaperRuntime;
   const SAFE_TEMPLATE_VARIABLES = new Set([
     "selectedText",
     "itemTitle",
@@ -86,11 +162,6 @@
       outputLanguageStrategy: "zh-CN"
     }
   };
-  const LLM_RUNTIME_LIMITS = {
-    requestsPerMinute: { defaultValue: 20, min: 1, max: 600 },
-    maxInputTokensPerTask: { defaultValue: 12000, min: 1000, max: 200000 },
-    windowMs: 60000
-  };
   const HTML_NS = "http://www.w3.org/1999/xhtml";
   const WorkbenchLlmRuntimeGuard = createLlmRuntimeGuard();
 
@@ -106,6 +177,13 @@
     return window.arguments?.[0]?.Zotero || window.opener?.Zotero || window.Zotero;
   }
 
+  function getComponents() {
+    if (typeof Components === "undefined") {
+      return null;
+    }
+    return Components;
+  }
+
   function getPref(key) {
     return getZotero()?.Prefs?.get(key) || "";
   }
@@ -117,6 +195,39 @@
     }
     zotero.Prefs.set(key, value);
   }
+
+  const WorkbenchLocalStore = createWorkbenchRuntimeStore({
+    getPref,
+    setPref,
+    snapshotPrefKey: PREFS.snapshot
+  });
+  const {
+    pickWorkbenchExportFile,
+    pickDefaultWorkbenchExportFile
+  } = createWorkbenchFileRuntime({
+    getZotero,
+    getComponents,
+    window,
+    console: window.console
+  });
+  const {
+    readTextFile,
+    readZipExportFile,
+    writeTextFile,
+    writeZipExportFile
+  } = createBrowserWorkbenchFileIo({
+    window,
+    getComponents
+  });
+  const {
+    getSelectedRegularItem,
+    readSelectedPaperContext,
+    readSelectedPaperPdfAttachment
+  } = createBrowserSelectedPaperRuntime({
+    window,
+    getZotero,
+    console: window.console
+  });
 
   function showStatus(statusId, message) {
     const status = getField(statusId);
@@ -228,7 +339,7 @@
         settings,
         promptOverrides: loadWorkbenchSnapshot().promptOverrides,
         runtimeGuard: WorkbenchLlmRuntimeGuard,
-        fetchImpl: window.fetch.bind(window)
+        fetchImpl: workbenchFetch
       });
       output.textContent = summary;
       window.WorkbenchLastSummary = summary;
@@ -267,7 +378,7 @@
         settings,
         promptOverrides: loadWorkbenchSnapshot().promptOverrides,
         runtimeGuard: WorkbenchLlmRuntimeGuard,
-        fetchImpl: window.fetch.bind(window)
+        fetchImpl: workbenchFetch
       });
       output.textContent = translation;
       window.WorkbenchLastSummary = translation;
@@ -325,18 +436,19 @@
     showStatus("paper-summary-status", "正在写入 Zotero 笔记...");
 
     try {
-      const note = new Zotero.Item("note");
-      note.parentItemID = parentItem.id;
-      note.setNote(buildZoteroNoteHtml({ draft, savedAt }));
-      await note.saveTx();
+      const { noteKey } = await writeZoteroChildNote({
+        Zotero,
+        parentItem,
+        html: buildZoteroNoteHtml({ draft, savedAt })
+      });
 
       const snapshot = markSummaryDraftSavedToZotero({
         snapshot: loadWorkbenchSnapshot(),
         draftId: draft.id,
-        zoteroNoteKey: note.key || "",
+        zoteroNoteKey: noteKey,
         savedAt
       });
-      setPref(PREFS.snapshot, JSON.stringify(snapshot));
+      saveWorkbenchSnapshot(snapshot);
       window.WorkbenchLastDraft = snapshot.researchNoteDrafts.find((entry) => entry.id === draft.id) || draft;
       showStatus("paper-summary-status", "已写入 Zotero 笔记");
       getField("paper-draft-status").textContent = `已确认并写入 Zotero 笔记（${formatLocalTime(savedAt)}）`;
@@ -370,7 +482,7 @@
         seedInput,
         createdAt
       });
-      setPref(PREFS.snapshot, JSON.stringify(snapshot));
+      saveWorkbenchSnapshot(snapshot);
       showStatus("graph-seed-status", `已捕获图谱种子（${formatLocalTime(createdAt)}）`);
       getField("graph-seed-target").value = "";
       renderWorkbenchRecords();
@@ -428,7 +540,7 @@
 
       const raw = await readTextFile(sourceFile);
       const snapshot = importWorkbenchExportPackage(raw);
-      setPref(PREFS.snapshot, JSON.stringify(snapshot));
+      saveWorkbenchSnapshot(snapshot);
       window.WorkbenchLastDraft = null;
       renderRecentDrafts();
       renderWorkbenchRecords();
@@ -482,7 +594,7 @@
 
       const payload = await readZipExportFile(sourceFile);
       const snapshot = importWorkbenchZipExportPayload(payload);
-      setPref(PREFS.snapshot, JSON.stringify(snapshot));
+      saveWorkbenchSnapshot(snapshot);
       window.WorkbenchLastDraft = null;
       renderRecentDrafts();
       renderWorkbenchRecords();
@@ -524,7 +636,7 @@
         templateId: selector.value,
         template: body.value
       });
-      setPref(PREFS.snapshot, JSON.stringify(snapshot));
+      saveWorkbenchSnapshot(snapshot);
       loadPromptTemplateEditor();
       showStatus("prompt-template-status", "提示词模板已保存");
     } catch (error) {
@@ -536,7 +648,7 @@
     try {
       const selector = getField("prompt-template-selector");
       const snapshot = removePromptOverride(loadWorkbenchSnapshot(), selector.value);
-      setPref(PREFS.snapshot, JSON.stringify(snapshot));
+      saveWorkbenchSnapshot(snapshot);
       loadPromptTemplateEditor();
       showStatus("prompt-template-status", "已重置为默认提示词模板");
     } catch (error) {
@@ -693,13 +805,6 @@
     return response;
   }
 
-  function requestWebDav(url, options) {
-    if (!window.fetch) {
-      throw new Error("当前 Zotero 环境不支持 WebDAV 请求");
-    }
-    return window.fetch(url, options);
-  }
-
   function getGraphSeedEvidenceText() {
     return (
       cleanText(getField("paper-summary-output").textContent) ||
@@ -707,78 +812,6 @@
       cleanText(window.WorkbenchLastDraft?.content) ||
       "未记录"
     );
-  }
-
-  function readSelectedPaperContext() {
-    const item = getSelectedRegularItem();
-    if (!item) {
-      return null;
-    }
-
-    return normalizePaperContext({
-      key: item.key,
-      itemType: item.itemType || item.getField?.("itemType"),
-      title: item.getField?.("title"),
-      abstractNote: item.getField?.("abstractNote"),
-      doi: item.getField?.("DOI"),
-      publicationTitle: item.getField?.("publicationTitle") || item.getField?.("bookTitle"),
-      date: item.getField?.("date"),
-      creators: item.getCreators?.() || [],
-      pdfAttachment: readSelectedPaperPdfAttachment(item)
-    });
-  }
-
-  function readSelectedPaperPdfAttachment(item) {
-    try {
-      const Zotero = getZotero();
-      const attachmentIds = item?.getAttachments?.() || [];
-      const attachments = attachmentIds
-        .map((id) => Zotero?.Items?.get?.(id))
-        .filter(Boolean)
-        .map((attachment) => ({
-          title:
-            attachment.getField?.("title") ||
-            attachment.getField?.("filename") ||
-            attachment.attachmentFilename ||
-            attachment.key ||
-            "",
-          path: readAttachmentPath(attachment),
-          contentType:
-            attachment.attachmentContentType ||
-            attachment.getField?.("contentType") ||
-            attachment.contentType ||
-            ""
-        }));
-      return selectBestPdfAttachment(attachments);
-    } catch (_error) {
-      return selectBestPdfAttachment([]);
-    }
-  }
-
-  function readAttachmentPath(attachment) {
-    const candidates = [
-      safeCallString(() => attachment?.getFilePath?.()),
-      attachment?.attachmentPath,
-      attachment?.path,
-      attachment?.filePath
-    ];
-    return candidates.find((value) => typeof value === "string" && value.trim()) || "";
-  }
-
-  function safeCallString(callback) {
-    try {
-      const value = callback();
-      return typeof value === "string" ? value : "";
-    } catch (_error) {
-      return "";
-    }
-  }
-
-  function getSelectedRegularItem() {
-    const Zotero = getZotero();
-    const win = Zotero?.getMainWindow?.();
-    const selectedItems = win?.ZoteroPane?.getSelectedItems?.() || Zotero?.Pane?.getSelectedItems?.() || [];
-    return selectedItems.find((entry) => entry && !entry.isNote?.() && !entry.isAttachment?.()) || null;
   }
 
   function renderPaperContext(paper) {
@@ -834,7 +867,7 @@
       }
     });
     snapshot.exportedAt = new Date().toISOString();
-    setPref(PREFS.snapshot, JSON.stringify(snapshot));
+    saveWorkbenchSnapshot(snapshot);
     window.WorkbenchLastDraft = draft;
     return draft;
   }
@@ -872,95 +905,17 @@
       }
     });
     snapshot.exportedAt = new Date().toISOString();
-    setPref(PREFS.snapshot, JSON.stringify(snapshot));
+    saveWorkbenchSnapshot(snapshot);
     window.WorkbenchLastDraft = draft;
     return draft;
   }
 
   function loadWorkbenchSnapshot() {
-    const raw = getPref(PREFS.snapshot);
-    if (!raw) {
-      return createEmptySnapshot();
-    }
-    try {
-      const snapshot = JSON.parse(raw);
-      return snapshot?.schemaVersion === 1 ? snapshot : createEmptySnapshot();
-    } catch (_error) {
-      return createEmptySnapshot();
-    }
+    return WorkbenchLocalStore.loadSnapshot();
   }
 
-  function createEmptySnapshot() {
-    return {
-      schemaVersion: 1,
-      exportedAt: new Date().toISOString(),
-      providers: [],
-      promptTemplates: [],
-      researchNoteDrafts: [],
-      graphSeeds: [],
-      citationRelations: [],
-      taskLedger: []
-    };
-  }
-
-  function createWorkbenchExportPackage({ snapshot, exportedAt } = {}) {
-    const timestamp = cleanText(exportedAt) || new Date().toISOString();
-    return {
-      packageKind: "zotero-research-workbench-export",
-      packageVersion: 1,
-      exportedAt: timestamp,
-      snapshot: normalizeSnapshotForExport(snapshot, timestamp)
-    };
-  }
-
-  function importWorkbenchExportPackage(input) {
-    let parsed;
-    try {
-      parsed = typeof input === "string" ? JSON.parse(input) : input;
-    } catch (_error) {
-      throw new Error("导入文件不是有效 JSON");
-    }
-
-    if (parsed?.packageKind !== "zotero-research-workbench-export" || parsed?.packageVersion !== 1) {
-      throw new Error("不支持的工作台导出文件");
-    }
-
-    return normalizeSnapshotForImport(parsed.snapshot);
-  }
-
-  function createWorkbenchZipExportPayload({ snapshot, exportedAt } = {}) {
-    const timestamp = cleanText(exportedAt) || new Date().toISOString();
-    const manifest = {
-      packageKind: "zotero-research-workbench-zip-export",
-      packageVersion: 1,
-      exportedAt: timestamp,
-      snapshotPath: "snapshot.json"
-    };
-    return {
-      packageKind: manifest.packageKind,
-      packageVersion: manifest.packageVersion,
-      exportedAt: timestamp,
-      files: {
-        "manifest.json": manifest,
-        "snapshot.json": createWorkbenchExportPackage({ snapshot, exportedAt: timestamp })
-      }
-    };
-  }
-
-  function importWorkbenchZipExportPayload(payload) {
-    if (payload?.packageKind !== "zotero-research-workbench-zip-export" || payload?.packageVersion !== 1) {
-      throw new Error("不支持的 ZIP 工作台导出包");
-    }
-    const manifest = payload.files?.["manifest.json"];
-    if (manifest?.packageKind !== "zotero-research-workbench-zip-export" || manifest?.packageVersion !== 1) {
-      throw new Error("不支持的 ZIP 工作台导出包");
-    }
-    const snapshotPath = cleanText(manifest.snapshotPath) || "snapshot.json";
-    const snapshotPackage = payload.files?.[snapshotPath];
-    if (!snapshotPackage) {
-      throw new Error("ZIP 导出包缺少 snapshot.json");
-    }
-    return importWorkbenchExportPackage(snapshotPackage);
+  function saveWorkbenchSnapshot(snapshot) {
+    return WorkbenchLocalStore.saveSnapshot(snapshot);
   }
 
   function normalizeWebDavExportTarget(input = {}) {
@@ -1037,55 +992,6 @@
     });
   }
 
-  function normalizeSnapshotForExport(snapshot, exportedAt) {
-    const normalized = normalizeSnapshotForImport(snapshot);
-    normalized.exportedAt = cleanText(exportedAt) || normalized.exportedAt || new Date().toISOString();
-    return redactSecretMaterial(normalized);
-  }
-
-  function normalizeSnapshotForImport(snapshot) {
-    if (!snapshot || snapshot.schemaVersion !== 1) {
-      throw new Error("不支持的工作台快照版本");
-    }
-
-    return {
-      schemaVersion: 1,
-      exportedAt: cleanText(snapshot.exportedAt) || new Date().toISOString(),
-      providers: Array.isArray(snapshot.providers) ? snapshot.providers : [],
-      promptTemplates: Array.isArray(snapshot.promptTemplates) ? snapshot.promptTemplates : [],
-      promptOverrides: Array.isArray(snapshot.promptOverrides) ? snapshot.promptOverrides : [],
-      providerProvenance: Array.isArray(snapshot.providerProvenance) ? snapshot.providerProvenance : [],
-      researchNoteDrafts: Array.isArray(snapshot.researchNoteDrafts) ? snapshot.researchNoteDrafts : [],
-      graphSeeds: Array.isArray(snapshot.graphSeeds) ? snapshot.graphSeeds : [],
-      citationRelations: Array.isArray(snapshot.citationRelations) ? snapshot.citationRelations : [],
-      taskLedger: Array.isArray(snapshot.taskLedger) ? snapshot.taskLedger : []
-    };
-  }
-
-  function redactSecretMaterial(value) {
-    if (Array.isArray(value)) {
-      return value.map((entry) => redactSecretMaterial(entry));
-    }
-    if (!value || typeof value !== "object") {
-      return value;
-    }
-
-    const redacted = {};
-    for (const [key, entry] of Object.entries(value)) {
-      redacted[key] = isSecretKey(key) && entry ? "<redacted>" : redactSecretMaterial(entry);
-    }
-    return redacted;
-  }
-
-  function isSecretKey(key) {
-    const value = String(key || "");
-    return (
-      /^(apiKey|api_key|api-key|password|passwd|pwd|authorization|secret|token)$/i.test(value) ||
-      /(^|[_-])(api[_-]?key|password|passwd|pwd|authorization|secret|token)([_-]|$)/i.test(value) ||
-      /Token$/.test(value)
-    );
-  }
-
   function buildImportStatus(snapshot) {
     return [
       "已导入工作台状态",
@@ -1095,322 +1001,8 @@
     ].join("；");
   }
 
-  async function pickWorkbenchExportFile({ mode, defaultString, filterName = "JSON", filterPattern = "*.json" } = {}) {
-    const Zotero = getZotero();
-    const zoteroFile = await tryZoteroFilePicker(Zotero, { mode, defaultString, filterName, filterPattern });
-    if (zoteroFile !== undefined) {
-      return zoteroFile;
-    }
-
-    return pickComponentsFile({ mode, defaultString, filterName, filterPattern });
-  }
-
-  async function tryZoteroFilePicker(Zotero, { mode, defaultString, filterName = "JSON", filterPattern = "*.json" } = {}) {
-    if (!Zotero?.FilePicker) {
-      return undefined;
-    }
-
-    try {
-      const FilePicker = Zotero.FilePicker;
-      const picker = createZoteroFilePicker(FilePicker);
-      if (!picker?.init || !picker?.appendFilter) {
-        return undefined;
-      }
-      initFilePicker(picker, filePickerTitle(mode), filePickerMode(picker, FilePicker, mode), {
-        useBrowsingContext: false
-      });
-      picker.appendFilter(filterName, filterPattern);
-      if (defaultString) {
-        picker.defaultString = defaultString;
-      }
-      const result = await showFilePicker(picker);
-      if (result === filePickerCancelValue(picker, FilePicker)) {
-        return null;
-      }
-      return picker.file || null;
-    } catch (error) {
-      window.console?.warn?.("[zotero-research-workbench] Zotero.FilePicker unavailable", error);
-      return undefined;
-    }
-  }
-
-  async function pickComponentsFile({ mode, defaultString, filterName = "JSON", filterPattern = "*.json" } = {}) {
-    if (typeof Components === "undefined" || !Components.classes || !Components.interfaces) {
-      throw new Error("当前 Zotero 环境不支持打开文件选择器");
-    }
-
-    const Ci = Components.interfaces;
-    const picker = Components.classes["@mozilla.org/filepicker;1"].createInstance(Ci.nsIFilePicker);
-    initFilePicker(picker, filePickerTitle(mode), mode === "save" ? Ci.nsIFilePicker.modeSave : Ci.nsIFilePicker.modeOpen, {
-      useBrowsingContext: true
-    });
-    picker.appendFilter(filterName, filterPattern);
-    if (defaultString) {
-      picker.defaultString = defaultString;
-    }
-    const result = await showFilePicker(picker);
-    if (result === Ci.nsIFilePicker.returnCancel) {
-      return null;
-    }
-    return picker.file;
-  }
-
-  function pickDefaultWorkbenchExportFile(defaultString) {
-    const desktop = getDesktopDirectory();
-    desktop.append(defaultString || `zotero-research-workbench-${createStableTimestamp(new Date().toISOString())}.json`);
-    return desktop;
-  }
-
-  function getDesktopDirectory() {
-    if (typeof Components === "undefined" || !Components.classes || !Components.interfaces) {
-      throw new Error("保存对话框不可用，且无法定位桌面目录");
-    }
-    const directoryService = Components.classes["@mozilla.org/file/directory_service;1"].getService(
-      Components.interfaces.nsIProperties
-    );
-    return directoryService.get("Desk", Components.interfaces.nsIFile);
-  }
-
-  function createZoteroFilePicker(FilePicker) {
-    if (typeof FilePicker !== "function") {
-      return FilePicker;
-    }
-    try {
-      return new FilePicker();
-    } catch (_error) {
-      return FilePicker();
-    }
-  }
-
-  function initFilePicker(picker, title, mode, { useBrowsingContext } = {}) {
-    let lastError = null;
-    for (const parentWindow of filePickerParentCandidates()) {
-      try {
-        picker.init(filePickerParentArgument(parentWindow, { useBrowsingContext }), title, mode);
-        return;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-    throw lastError || new Error("当前 Zotero 环境不支持初始化文件选择器");
-  }
-
-  function filePickerParentCandidates() {
-    const Zotero = getZotero();
-    return [
-      Zotero?.getMainWindow?.(),
-      window.opener,
-      window,
-      null
-    ];
-  }
-
-  function filePickerParentArgument(parentWindow, { useBrowsingContext } = {}) {
-    if (!useBrowsingContext || parentWindow === null) {
-      return parentWindow;
-    }
-    return parentWindow?.browsingContext;
-  }
-
-  function filePickerTitle(mode) {
-    return mode === "save" ? "导出工作台状态" : "导入工作台状态";
-  }
-
-  function filePickerMode(picker, FilePicker, mode) {
-    if (mode === "save") {
-      return picker.modeSave ?? FilePicker.modeSave;
-    }
-    return picker.modeOpen ?? FilePicker.modeOpen;
-  }
-
-  function filePickerCancelValue(picker, FilePicker) {
-    return picker.returnCancel ?? FilePicker.returnCancel;
-  }
-
-  function showFilePicker(picker) {
-    if (typeof picker.show === "function") {
-      return Promise.resolve(picker.show());
-    }
-    if (typeof picker.open === "function") {
-      return new Promise((resolve) => picker.open(resolve));
-    }
-    throw new Error("当前 Zotero 环境不支持打开文件选择器");
-  }
-
-  async function writeTextFile(file, text) {
-    const path = file?.path || file;
-    if (!path) {
-      throw new Error("未选择导出文件");
-    }
-    if (typeof IOUtils !== "undefined" && IOUtils.writeUTF8) {
-      await IOUtils.writeUTF8(path, text);
-      return;
-    }
-    if (typeof OS !== "undefined" && OS.File?.writeAtomic) {
-      await OS.File.writeAtomic(path, new TextEncoder().encode(text), { tmpPath: `${path}.tmp` });
-      return;
-    }
-    throw new Error("当前 Zotero 环境不支持写入导出文件");
-  }
-
   function describeFilePath(file) {
     return file?.path || String(file || "");
-  }
-
-  async function readTextFile(file) {
-    const path = file?.path || file;
-    if (!path) {
-      throw new Error("未选择导入文件");
-    }
-    if (typeof IOUtils !== "undefined" && IOUtils.readUTF8) {
-      return IOUtils.readUTF8(path);
-    }
-    if (typeof OS !== "undefined" && OS.File?.read) {
-      return new TextDecoder().decode(await OS.File.read(path));
-    }
-    throw new Error("当前 Zotero 环境不支持读取导入文件");
-  }
-
-  async function writeZipExportFile(targetFile, payload) {
-    const file = resolveLocalFile(targetFile, "未选择 ZIP 导出文件");
-    const zipWriter = createZipWriter(file);
-    try {
-      zipWriter.open(file, zipWriterOpenFlags());
-      for (const [path, value] of Object.entries(payload.files || {})) {
-        zipWriter.addEntryStream(
-          path,
-          Date.now() * 1000,
-          Components.interfaces.nsIZipWriter.COMPRESSION_DEFAULT,
-          createUtf8InputStream(JSON.stringify(value, null, 2)),
-          false
-        );
-      }
-    } finally {
-      zipWriter.close();
-    }
-    verifyZipExportFile(file, payload);
-  }
-
-  function verifyZipExportFile(file, payload) {
-    const zipReader = createZipReader(file);
-    try {
-      zipReader.open(file);
-      if (!zipReader.hasEntry("manifest.json")) {
-        throw new Error("ZIP 导出包为空或缺少 manifest.json");
-      }
-      const snapshotPath = cleanText(payload?.files?.["manifest.json"]?.snapshotPath) || "snapshot.json";
-      if (!zipReader.hasEntry(snapshotPath)) {
-        if (snapshotPath === "snapshot.json") {
-          throw new Error("ZIP 导出包为空或缺少 snapshot.json");
-        }
-        throw new Error(`ZIP 导出包为空或缺少 ${snapshotPath}`);
-      }
-    } finally {
-      zipReader.close();
-    }
-  }
-
-  async function readZipExportFile(sourceFile) {
-    const file = resolveLocalFile(sourceFile, "未选择 ZIP 导入文件");
-    const zipReader = createZipReader(file);
-    try {
-      zipReader.open(file);
-      const manifest = JSON.parse(readZipEntryText(zipReader, "manifest.json"));
-      const snapshotPath = cleanText(manifest.snapshotPath) || "snapshot.json";
-      const snapshotPackage = JSON.parse(readZipEntryText(zipReader, snapshotPath));
-      return {
-        packageKind: manifest.packageKind,
-        packageVersion: manifest.packageVersion,
-        exportedAt: manifest.exportedAt,
-        files: {
-          "manifest.json": manifest,
-          [snapshotPath]: snapshotPackage
-        }
-      };
-    } finally {
-      zipReader.close();
-    }
-  }
-
-  function createZipWriter(file) {
-    if (typeof Components === "undefined" || !Components.classes || !Components.interfaces) {
-      throw new Error("当前 Zotero 环境不可用 ZIP 文件接口");
-    }
-    const writerClass = Components.classes["@mozilla.org/zipwriter;1"];
-    if (!writerClass) {
-      throw new Error("当前 Zotero 环境不可用 ZIP 文件接口");
-    }
-    return writerClass.createInstance(Components.interfaces.nsIZipWriter);
-  }
-
-  function createZipReader(file) {
-    if (typeof Components === "undefined" || !Components.classes || !Components.interfaces) {
-      throw new Error("当前 Zotero 环境不可用 ZIP 文件接口");
-    }
-    const readerClass = Components.classes["@mozilla.org/libjar/zip-reader;1"];
-    if (!readerClass) {
-      throw new Error("当前 Zotero 环境不可用 ZIP 文件接口");
-    }
-    return readerClass.createInstance(Components.interfaces.nsIZipReader);
-  }
-
-  function zipWriterOpenFlags() {
-    const PR_RDWR = 0x04;
-    const PR_WRONLY = 0x02;
-    const PR_CREATE_FILE = 0x08;
-    const PR_TRUNCATE = 0x20;
-    return PR_RDWR | PR_WRONLY | PR_CREATE_FILE | PR_TRUNCATE;
-  }
-
-  function createUtf8InputStream(text) {
-    const stream = Components.classes["@mozilla.org/io/string-input-stream;1"].createInstance(
-      Components.interfaces.nsIStringInputStream
-    );
-    stream.setUTF8Data(String(text || ""));
-    return stream;
-  }
-
-  function readZipEntryText(zipReader, path) {
-    if (!zipReader.hasEntry(path)) {
-      throw new Error(`ZIP 导出包缺少 ${path}`);
-    }
-    const stream = zipReader.getInputStream(path);
-    try {
-      const converter = Components.classes["@mozilla.org/intl/scriptableunicodeconverter"].createInstance(
-        Components.interfaces.nsIScriptableUnicodeConverter
-      );
-      converter.charset = "UTF-8";
-      return converter.ConvertToUnicode(readStreamBytes(stream));
-    } finally {
-      stream.close();
-    }
-  }
-
-  function readStreamBytes(stream) {
-    const binaryInput = Components.classes["@mozilla.org/binaryinputstream;1"].createInstance(
-      Components.interfaces.nsIBinaryInputStream
-    );
-    binaryInput.setInputStream(stream);
-    const chunks = [];
-    while (binaryInput.available() > 0) {
-      chunks.push(binaryInput.readBytes(binaryInput.available()));
-    }
-    return chunks.join("");
-  }
-
-  function resolveLocalFile(file, missingMessage) {
-    if (!file) {
-      throw new Error(missingMessage);
-    }
-    if (typeof file === "object" && file.path) {
-      return file;
-    }
-    if (typeof Components === "undefined" || !Components.classes || !Components.interfaces) {
-      throw new Error("当前 Zotero 环境不可用 ZIP 文件接口");
-    }
-    const localFile = Components.classes["@mozilla.org/file/local;1"].createInstance(Components.interfaces.nsIFile);
-    localFile.initWithPath(String(file));
-    return localFile;
   }
 
   function renderDraftStatus(draft) {
@@ -1635,7 +1227,7 @@
         reviewState,
         reviewedAt: new Date().toISOString()
       });
-      setPref(PREFS.snapshot, JSON.stringify(snapshot));
+      saveWorkbenchSnapshot(snapshot);
       showStatus("workbench-export-status", reviewState === "confirmed" ? "图谱种子已确认" : "图谱种子已拒绝");
       renderWorkbenchRecords();
       renderGraphSeedReviewQueue();
@@ -1651,7 +1243,7 @@
         seedId,
         promotedAt: new Date().toISOString()
       });
-      setPref(PREFS.snapshot, JSON.stringify(snapshot));
+      saveWorkbenchSnapshot(snapshot);
       showStatus("workbench-export-status", "已生成引用关系");
       renderWorkbenchRecords();
       renderGraphSeedReviewQueue();
@@ -1918,30 +1510,13 @@
       taskType: "single-paper-chinese-summary",
       runtimeGuard
     });
-    const response = await fetchImpl(`${settings.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${settings.apiKey}`
-      },
-      body: JSON.stringify({
-        model: settings.model,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.2
-      })
+    return requestOpenAICompatibleChatCompletion({
+      settings,
+      prompt,
+      temperature: 0.2,
+      fetchImpl,
+      failureMessage: "总结生成失败"
     });
-
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new Error("API 密钥无效");
-      }
-      if (response.status === 408 || response.status === 504) {
-        throw new Error("请求超时");
-      }
-      throw new Error(`总结生成失败（HTTP ${response.status}）`);
-    }
-
-    return parseChatCompletionText(parseJsonResponseText(await readResponseText(response)));
   }
 
   async function requestReadingContextTranslation({ context, settings, fetchImpl, promptOverrides, runtimeGuard }) {
@@ -1955,156 +1530,13 @@
       taskType: "reading-context-chinese-translation",
       runtimeGuard
     });
-    const response = await fetchImpl(`${settings.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${settings.apiKey}`
-      },
-      body: JSON.stringify({
-        model: settings.model,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.1
-      })
+    return requestOpenAICompatibleChatCompletion({
+      settings,
+      prompt,
+      temperature: 0.1,
+      fetchImpl,
+      failureMessage: "翻译生成失败"
     });
-
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new Error("API 密钥无效");
-      }
-      if (response.status === 408 || response.status === 504) {
-        throw new Error("请求超时");
-      }
-      throw new Error(`翻译生成失败（HTTP ${response.status}）`);
-    }
-
-    return parseChatCompletionText(parseJsonResponseText(await readResponseText(response)));
-  }
-
-  function assertLlmRuntimeRequestAllowed({ prompt, settings, taskType, runtimeGuard }) {
-    const maxInputTokensPerTask = normalizeRuntimeLimit(
-      settings?.maxInputTokensPerTask,
-      LLM_RUNTIME_LIMITS.maxInputTokensPerTask
-    );
-    const estimatedTokens = estimatePromptTokens(prompt);
-    if (estimatedTokens > maxInputTokensPerTask) {
-      throw createLlmRuntimeError("输入内容超过单任务 Token 上限", {
-        taskType,
-        estimatedTokens,
-        maxInputTokensPerTask
-      });
-    }
-
-    runtimeGuard?.assertRequestAllowed?.({
-      taskType,
-      requestsPerMinute: settings?.requestsPerMinute
-    });
-  }
-
-  function createLlmRuntimeGuard({ now } = {}) {
-    const clock = typeof now === "function" ? now : () => Date.now();
-    const requestTimestamps = [];
-    return {
-      assertRequestAllowed({ taskType, requestsPerMinute } = {}) {
-        const limit = normalizeRuntimeLimit(requestsPerMinute, LLM_RUNTIME_LIMITS.requestsPerMinute);
-        const current = Number(clock());
-        const cutoff = current - LLM_RUNTIME_LIMITS.windowMs;
-        while (requestTimestamps.length && requestTimestamps[0] <= cutoff) {
-          requestTimestamps.shift();
-        }
-        if (requestTimestamps.length >= limit) {
-          throw createLlmRuntimeError("请求过于频繁，请稍后再试", {
-            taskType,
-            requestsInWindow: requestTimestamps.length,
-            requestsPerMinute: limit,
-            windowMs: LLM_RUNTIME_LIMITS.windowMs
-          });
-        }
-        requestTimestamps.push(current);
-        return {
-          requestsInWindow: requestTimestamps.length,
-          requestsPerMinute: limit,
-          windowMs: LLM_RUNTIME_LIMITS.windowMs
-        };
-      }
-    };
-  }
-
-  function estimatePromptTokens(prompt) {
-    const value = cleanDisplayText(prompt);
-    if (!value) {
-      return 0;
-    }
-    const cjkPattern = /[\u3400-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]/g;
-    const cjkCount = (value.match(cjkPattern) || []).length;
-    const nonCjkCharacters = value.replace(cjkPattern, "").replace(/\s+/g, "").length;
-    return cjkCount + Math.ceil(nonCjkCharacters / 4);
-  }
-
-  function normalizeRuntimeLimit(value, rule) {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) {
-      return rule.defaultValue;
-    }
-    return Math.min(rule.max, Math.max(rule.min, Math.round(numeric)));
-  }
-
-  function createLlmRuntimeError(message, metadata) {
-    const error = new Error(message);
-    error.name = "LlmRuntimeGuardError";
-    Object.assign(error, metadata);
-    return error;
-  }
-
-  function normalizePaperContext(input) {
-    const pdfAttachment = input.pdfAttachment || selectBestPdfAttachment(input.pdfAttachments || []);
-    return {
-      key: cleanText(input.key),
-      itemType: cleanText(input.itemType),
-      title: cleanText(input.title) || "未命名条目",
-      authors: cleanText(input.authors) || formatCreators(input.creators),
-      year: cleanText(input.year) || extractYear(input.date),
-      publicationTitle: cleanText(input.publicationTitle) || "未记录",
-      abstractNote: cleanText(input.abstractNote) || "未记录摘要",
-      doi: cleanText(input.doi) || "未记录",
-      pdfAttachment
-    };
-  }
-
-  function selectBestPdfAttachment(attachments) {
-    const candidates = Array.isArray(attachments) ? attachments : [];
-    for (const attachment of candidates) {
-      const normalized = normalizePdfAttachment(attachment);
-      if (isPdfAttachment(normalized)) {
-        return {
-          available: true,
-          title: normalized.title,
-          path: normalized.path,
-          contentType: normalized.contentType
-        };
-      }
-    }
-    return {
-      available: false,
-      title: "",
-      path: "",
-      contentType: ""
-    };
-  }
-
-  function normalizePdfAttachment(attachment) {
-    return {
-      title: cleanDisplayText(attachment?.title || attachment?.filename || attachment?.name),
-      path: cleanDisplayText(attachment?.path || attachment?.filePath),
-      contentType: cleanDisplayText(attachment?.contentType || attachment?.mimeType)
-    };
-  }
-
-  function isPdfAttachment(attachment) {
-    const contentType = attachment.contentType.toLowerCase();
-    const path = attachment.path.toLowerCase();
-    const title = attachment.title.toLowerCase();
-    return contentType === "application/pdf" || path.endsWith(".pdf") || title.endsWith(".pdf");
   }
 
   function buildChinesePaperSummaryPrompt(context) {
@@ -2219,14 +1651,6 @@
       (entry) => entry?.templateId !== templateId
     );
     return next;
-  }
-
-  function parseChatCompletionText(body) {
-    const text = body?.choices?.[0]?.message?.content;
-    if (!cleanText(text)) {
-      throw new Error("LLM 响应为空");
-    }
-    return text.trim();
   }
 
   function buildSummaryCopyText({ paper, summary, draft }) {
@@ -3057,48 +2481,6 @@
         errorMessage: describeTaskError(task?.errorNotice),
         occurredAt: cleanDisplayText(taskTimestamp(task))
       }));
-  }
-
-  async function writeClipboardText(text) {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return;
-    }
-
-    const textarea = createHtmlElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "readonly");
-    textarea.style.position = "fixed";
-    textarea.style.inset = "-1000px auto auto -1000px";
-    document.body.appendChild(textarea);
-    textarea.select();
-    const copied = document.execCommand?.("copy");
-    textarea.remove();
-    if (!copied) {
-      throw new Error("copy failed");
-    }
-  }
-
-  async function readResponseText(response) {
-    if (typeof response.text === "function") {
-      return response.text();
-    }
-    if (typeof response.json === "function") {
-      try {
-        return JSON.stringify(await response.json());
-      } catch (_error) {
-        return "";
-      }
-    }
-    return "";
-  }
-
-  function parseJsonResponseText(text) {
-    try {
-      return JSON.parse(text);
-    } catch (_error) {
-      throw new Error("LLM 服务返回了无法解析的响应，请检查接口地址是否为 OpenAI 兼容地址");
-    }
   }
 
   function formatCreators(creators) {

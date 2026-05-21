@@ -1,4 +1,11 @@
-const SECRET_PLACEHOLDER = "<redacted>";
+const {
+  SECRET_PLACEHOLDER,
+  createWorkbenchExportPackage,
+  createWorkbenchZipExportPayload,
+  importWorkbenchExportPackage,
+  importWorkbenchZipExportPayload,
+  redactSecretMaterial
+} = require("./workbenchSnapshot");
 
 const SAFE_TEMPLATE_VARIABLES = new Set([
   "selectedText",
@@ -128,37 +135,8 @@ function normalizeProviderNumber(value, rule) {
   return Math.min(rule.max, Math.max(rule.min, Math.round(numeric)));
 }
 
-function redactSecretMaterial(value) {
-  if (Array.isArray(value)) {
-    return value.map((item) => redactSecretMaterial(item));
-  }
-
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-
-  const redacted = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if (isSecretKey(key) && entry) {
-      redacted[key] = SECRET_PLACEHOLDER;
-    } else {
-      redacted[key] = redactSecretMaterial(entry);
-    }
-  }
-  return redacted;
-}
-
-function isSecretKey(key) {
-  const value = String(key || "");
-  return (
-    /^(apiKey|api_key|api-key|password|passwd|pwd|authorization|secret|token)$/i.test(value) ||
-    /(^|[_-])(api[_-]?key|password|passwd|pwd|authorization|secret|token)([_-]|$)/i.test(value) ||
-    /Token$/.test(value)
-  );
-}
-
 function createLayeredErrorNotice(error, fallbackMessage = "操作失败") {
-  const rawUserMessage = cleanString(error?.message) || cleanString(fallbackMessage) || "操作失败";
+  const rawUserMessage = cleanString(error?.userMessage) || cleanString(error?.message) || cleanString(fallbackMessage) || "操作失败";
   const userMessage = sanitizeSecretText(rawUserMessage) || cleanString(fallbackMessage) || "操作失败";
   const technicalDetail = sanitizeSecretText(formatTechnicalErrorDetail(error) || rawUserMessage).slice(0, 4000);
   return {
@@ -176,6 +154,9 @@ function formatTechnicalErrorDetail(error) {
   }
 
   const parts = [];
+  if (cleanString(error.technicalDetail)) {
+    parts.push(error.technicalDetail);
+  }
   if (error.name) {
     parts.push(`name: ${error.name}`);
   }
@@ -188,6 +169,9 @@ function formatTechnicalErrorDetail(error) {
 
   const metadata = {};
   for (const key of Object.keys(error)) {
+    if (key === "technicalDetail") {
+      continue;
+    }
     metadata[key] = error[key];
   }
   if (Object.keys(metadata).length) {
@@ -447,66 +431,6 @@ class WorkbenchLocalStore {
   }
 }
 
-function createWorkbenchExportPackage({ snapshot, exportedAt } = {}) {
-  const timestamp = exportedAt || new Date().toISOString();
-  return {
-    packageKind: "zotero-research-workbench-export",
-    packageVersion: 1,
-    exportedAt: timestamp,
-    snapshot: normalizeSnapshotForExport(snapshot, timestamp)
-  };
-}
-
-function importWorkbenchExportPackage(input) {
-  let parsed;
-  try {
-    parsed = typeof input === "string" ? JSON.parse(input) : input;
-  } catch (_error) {
-    throw new Error("Invalid workbench export package JSON");
-  }
-
-  if (parsed?.packageKind !== "zotero-research-workbench-export" || parsed?.packageVersion !== 1) {
-    throw new Error("Unsupported workbench export package");
-  }
-
-  return normalizeSnapshotForImport(parsed.snapshot);
-}
-
-function createWorkbenchZipExportPayload({ snapshot, exportedAt } = {}) {
-  const timestamp = exportedAt || new Date().toISOString();
-  const manifest = {
-    packageKind: "zotero-research-workbench-zip-export",
-    packageVersion: 1,
-    exportedAt: timestamp,
-    snapshotPath: "snapshot.json"
-  };
-  return {
-    packageKind: manifest.packageKind,
-    packageVersion: manifest.packageVersion,
-    exportedAt: timestamp,
-    files: {
-      "manifest.json": manifest,
-      "snapshot.json": createWorkbenchExportPackage({ snapshot, exportedAt: timestamp })
-    }
-  };
-}
-
-function importWorkbenchZipExportPayload(payload) {
-  if (payload?.packageKind !== "zotero-research-workbench-zip-export" || payload?.packageVersion !== 1) {
-    throw new Error("不支持的 ZIP 工作台导出包");
-  }
-  const manifest = payload.files?.["manifest.json"];
-  if (manifest?.packageKind !== "zotero-research-workbench-zip-export" || manifest?.packageVersion !== 1) {
-    throw new Error("不支持的 ZIP 工作台导出包");
-  }
-  const snapshotPath = manifest.snapshotPath || "snapshot.json";
-  const snapshotPackage = payload.files?.[snapshotPath];
-  if (!snapshotPackage) {
-    throw new Error("ZIP 导出包缺少 snapshot.json");
-  }
-  return importWorkbenchExportPackage(snapshotPackage);
-}
-
 function normalizeWebDavExportTarget(input = {}) {
   const serverUrl = cleanString(input.serverUrl);
   const username = cleanString(input.username);
@@ -579,31 +503,6 @@ function buildWebDavDirectoryRequests(target) {
       headers
     };
   });
-}
-
-function normalizeSnapshotForExport(snapshot, exportedAt) {
-  const normalized = normalizeSnapshotForImport(snapshot);
-  normalized.exportedAt = exportedAt || normalized.exportedAt || new Date().toISOString();
-  return redactSecretMaterial(normalized);
-}
-
-function normalizeSnapshotForImport(snapshot) {
-  if (!snapshot || snapshot.schemaVersion !== 1) {
-    throw new Error("Unsupported workbench snapshot schema");
-  }
-
-  return {
-    schemaVersion: 1,
-    exportedAt: snapshot.exportedAt || new Date().toISOString(),
-    providers: Array.isArray(snapshot.providers) ? snapshot.providers : [],
-    promptTemplates: Array.isArray(snapshot.promptTemplates) ? snapshot.promptTemplates : [],
-    promptOverrides: Array.isArray(snapshot.promptOverrides) ? snapshot.promptOverrides : [],
-    providerProvenance: Array.isArray(snapshot.providerProvenance) ? snapshot.providerProvenance : [],
-    researchNoteDrafts: Array.isArray(snapshot.researchNoteDrafts) ? snapshot.researchNoteDrafts : [],
-    graphSeeds: Array.isArray(snapshot.graphSeeds) ? snapshot.graphSeeds : [],
-    citationRelations: Array.isArray(snapshot.citationRelations) ? snapshot.citationRelations : [],
-    taskLedger: Array.isArray(snapshot.taskLedger) ? snapshot.taskLedger : []
-  };
 }
 
 function createId(prefix) {

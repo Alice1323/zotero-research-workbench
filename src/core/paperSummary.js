@@ -1,10 +1,10 @@
 const { resolvePromptTemplate, renderPrompt } = require("./index");
-
-const LLM_RUNTIME_LIMITS = {
-  requestsPerMinute: { defaultValue: 20, min: 1, max: 600 },
-  maxInputTokensPerTask: { defaultValue: 12000, min: 1000, max: 200000 },
-  windowMs: 60_000
-};
+const {
+  assertLlmRuntimeRequestAllowed,
+  createLlmRuntimeGuard,
+  estimatePromptTokens
+} = require("./llmRuntimeGuard");
+const { parseChatCompletionText, requestOpenAICompatibleChatCompletion } = require("./providerChatCompletion");
 
 function normalizePaperContext(input) {
   const title = cleanText(input.title) || "未命名条目";
@@ -47,14 +47,6 @@ function buildChinesePaperSummaryPrompt(context) {
 
 function buildChineseReadingContextTranslationPrompt(context) {
   return renderPrompt(resolvePromptTemplate("reading-context-chinese-translation"), createReadingPromptContext(context));
-}
-
-function parseChatCompletionText(body) {
-  const text = body?.choices?.[0]?.message?.content;
-  if (!cleanText(text)) {
-    throw new Error("LLM 响应为空");
-  }
-  return text.trim();
 }
 
 function buildSummaryCopyText({ paper, summary, draft }) {
@@ -284,30 +276,13 @@ async function requestReadingContextTranslation({ context, settings, fetchImpl, 
     taskType: "reading-context-chinese-translation",
     runtimeGuard
   });
-  const response = await fetchImpl(`${settings.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${settings.apiKey}`
-    },
-    body: JSON.stringify({
-      model: settings.model,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.1
-    })
+  return requestOpenAICompatibleChatCompletion({
+    settings,
+    prompt,
+    temperature: 0.1,
+    fetchImpl,
+    failureMessage: "翻译生成失败"
   });
-
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new Error("API 密钥无效");
-    }
-    if (response.status === 408 || response.status === 504) {
-      throw new Error("请求超时");
-    }
-    throw new Error(`翻译生成失败（HTTP ${response.status}）`);
-  }
-
-  return parseChatCompletionText(parseJsonResponseText(await readResponseText(response)));
 }
 
 async function requestPaperSummary({ paper, settings, fetchImpl, promptOverrides, runtimeGuard }) {
@@ -321,105 +296,13 @@ async function requestPaperSummary({ paper, settings, fetchImpl, promptOverrides
     taskType: "single-paper-chinese-summary",
     runtimeGuard
   });
-  const response = await fetchImpl(`${settings.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${settings.apiKey}`
-    },
-    body: JSON.stringify({
-      model: settings.model,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.2
-    })
+  return requestOpenAICompatibleChatCompletion({
+    settings,
+    prompt,
+    temperature: 0.2,
+    fetchImpl,
+    failureMessage: "总结生成失败"
   });
-
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new Error("API 密钥无效");
-    }
-    if (response.status === 408 || response.status === 504) {
-      throw new Error("请求超时");
-    }
-    throw new Error(`总结生成失败（HTTP ${response.status}）`);
-  }
-
-  return parseChatCompletionText(parseJsonResponseText(await readResponseText(response)));
-}
-
-function assertLlmRuntimeRequestAllowed({ prompt, settings, taskType, runtimeGuard }) {
-  const maxInputTokensPerTask = normalizeRuntimeLimit(
-    settings?.maxInputTokensPerTask,
-    LLM_RUNTIME_LIMITS.maxInputTokensPerTask
-  );
-  const estimatedTokens = estimatePromptTokens(prompt);
-  if (estimatedTokens > maxInputTokensPerTask) {
-    throw createLlmRuntimeError("输入内容超过单任务 Token 上限", {
-      taskType,
-      estimatedTokens,
-      maxInputTokensPerTask
-    });
-  }
-
-  runtimeGuard?.assertRequestAllowed?.({
-    taskType,
-    requestsPerMinute: settings?.requestsPerMinute
-  });
-}
-
-function createLlmRuntimeGuard({ now } = {}) {
-  const clock = typeof now === "function" ? now : () => Date.now();
-  const requestTimestamps = [];
-  return {
-    assertRequestAllowed({ taskType, requestsPerMinute } = {}) {
-      const limit = normalizeRuntimeLimit(requestsPerMinute, LLM_RUNTIME_LIMITS.requestsPerMinute);
-      const current = Number(clock());
-      const cutoff = current - LLM_RUNTIME_LIMITS.windowMs;
-      while (requestTimestamps.length && requestTimestamps[0] <= cutoff) {
-        requestTimestamps.shift();
-      }
-      if (requestTimestamps.length >= limit) {
-        throw createLlmRuntimeError("请求过于频繁，请稍后再试", {
-          taskType,
-          requestsInWindow: requestTimestamps.length,
-          requestsPerMinute: limit,
-          windowMs: LLM_RUNTIME_LIMITS.windowMs
-        });
-      }
-      requestTimestamps.push(current);
-      return {
-        requestsInWindow: requestTimestamps.length,
-        requestsPerMinute: limit,
-        windowMs: LLM_RUNTIME_LIMITS.windowMs
-      };
-    }
-  };
-}
-
-function estimatePromptTokens(prompt) {
-  const value = cleanDisplayText(prompt);
-  if (!value) {
-    return 0;
-  }
-  const cjkPattern = /[\u3400-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]/g;
-  const cjkCount = (value.match(cjkPattern) || []).length;
-  const nonCjkCharacters = value.replace(cjkPattern, "").replace(/\s+/g, "").length;
-  return cjkCount + Math.ceil(nonCjkCharacters / 4);
-}
-
-function normalizeRuntimeLimit(value, rule) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return rule.defaultValue;
-  }
-  return Math.min(rule.max, Math.max(rule.min, Math.round(numeric)));
-}
-
-function createLlmRuntimeError(message, metadata) {
-  const error = new Error(message);
-  error.name = "LlmRuntimeGuardError";
-  Object.assign(error, metadata);
-  return error;
 }
 
 function createPaperPromptContext(input) {
@@ -440,28 +323,6 @@ function createReadingPromptContext(context) {
     pageLabel: cleanText(context?.pageLabel) || "未记录",
     source: cleanText(context?.source) || "reader-selection"
   };
-}
-
-async function readResponseText(response) {
-  if (typeof response.text === "function") {
-    return response.text();
-  }
-  if (typeof response.json === "function") {
-    try {
-      return JSON.stringify(await response.json());
-    } catch (_error) {
-      return "";
-    }
-  }
-  return "";
-}
-
-function parseJsonResponseText(text) {
-  try {
-    return JSON.parse(text);
-  } catch (_error) {
-    throw new Error("LLM 服务返回了无法解析的响应，请检查接口地址是否为 OpenAI 兼容地址");
-  }
 }
 
 function formatCreators(creators) {

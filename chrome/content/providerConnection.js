@@ -1,4 +1,9 @@
 (function () {
+  const {
+    requestOpenAICompatibleChatCompletionResponse,
+    requestOpenAICompatibleModelsResponse
+  } = window.WorkbenchProviderChatCompletion;
+
   async function testOpenAICompatibleConnection(settings, options = {}) {
     const baseUrl = (settings.baseUrl || "").trim();
     const apiKey = (settings.apiKey || "").trim();
@@ -20,10 +25,9 @@
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      const providerSettings = { baseUrl, apiKey, model };
       const modelCheck = await inspectModelList({
-        baseUrl,
-        apiKey,
-        model,
+        settings: providerSettings,
         fetchImpl,
         signal: controller.signal
       });
@@ -31,7 +35,7 @@
         return { ok: false, message: modelCheck.message };
       }
 
-      const response = await requestChatCompletion({ baseUrl, apiKey, model, fetchImpl, signal: controller.signal });
+      const response = await requestChatCompletion({ settings: providerSettings, fetchImpl, signal: controller.signal });
 
       if (response.ok) {
         if (!(await hasOpenAIChatCompletionContent(response))) {
@@ -39,8 +43,7 @@
         }
         if (!modelCheck.modelListed) {
           const probeCheck = await verifyImpossibleModelIsRejected({
-            baseUrl,
-            apiKey,
+            settings: providerSettings,
             fetchImpl,
             signal: controller.signal
           });
@@ -64,9 +67,16 @@
       }
       const bodyText = await readResponseText(response);
       if (isModelErrorResponse(response.status, bodyText)) {
-        return { ok: false, message: "模型不可用" };
+        return { ok: false, message: "模型不可用", details: createProviderResponseDetails(response.status, bodyText) };
       }
-      return { ok: false, message: `连接失败（HTTP ${response.status}）` };
+      if (modelCheck.listAvailable && !modelCheck.modelListed) {
+        return { ok: false, message: "模型不可用", details: createProviderResponseDetails(response.status, bodyText) };
+      }
+      return {
+        ok: false,
+        message: `连接失败（HTTP ${response.status}）`,
+        details: createProviderResponseDetails(response.status, bodyText)
+      };
     } catch (error) {
       if (error && error.name === "AbortError") {
         return { ok: false, message: "请求超时" };
@@ -77,29 +87,21 @@
     }
   }
 
-  async function requestChatCompletion({ baseUrl, apiKey, model, fetchImpl, signal }) {
-    return fetchImpl(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content: "ping" }],
-        max_tokens: 1,
-        temperature: 0
-      }),
+  async function requestChatCompletion({ settings, fetchImpl, signal }) {
+    return requestOpenAICompatibleChatCompletionResponse({
+      settings,
+      prompt: "ping",
+      temperature: 0,
+      maxTokens: 1,
+      fetchImpl,
       signal
     });
   }
 
-  async function inspectModelList({ baseUrl, apiKey, model, fetchImpl, signal }) {
-    const response = await fetchImpl(`${baseUrl.replace(/\/+$/, "")}/models`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${apiKey}`
-      },
+  async function inspectModelList({ settings, fetchImpl, signal }) {
+    const response = await requestOpenAICompatibleModelsResponse({
+      settings,
+      fetchImpl,
       signal
     });
 
@@ -117,14 +119,15 @@
     const modelIds = Array.isArray(body.data)
       ? body.data.map((entry) => entry && entry.id).filter(Boolean)
       : [];
-    return { fatal: false, listAvailable: true, modelListed: modelIds.includes(model) };
+    return { fatal: false, listAvailable: true, modelListed: modelIds.includes(settings.model) };
   }
 
-  async function verifyImpossibleModelIsRejected({ baseUrl, apiKey, fetchImpl, signal }) {
+  async function verifyImpossibleModelIsRejected({ settings, fetchImpl, signal }) {
     const response = await requestChatCompletion({
-      baseUrl,
-      apiKey,
-      model: "zotero-research-workbench-invalid-model-probe",
+      settings: {
+        ...settings,
+        model: "zotero-research-workbench-invalid-model-probe"
+      },
       fetchImpl,
       signal
     });
@@ -145,7 +148,12 @@
     if ([400, 404, 422].includes(response.status)) {
       return { ok: true };
     }
-    return { ok: false, message: `模型验证失败（HTTP ${response.status}）` };
+    const bodyText = await readResponseText(response);
+    return {
+      ok: false,
+      message: `模型验证失败（HTTP ${response.status}）`,
+      details: createProviderResponseDetails(response.status, bodyText)
+    };
   }
 
   async function hasOpenAIChatCompletionContent(response) {
@@ -202,6 +210,24 @@
       return 15000;
     }
     return Math.round(numeric);
+  }
+
+  function createProviderResponseDetails(status, bodyText) {
+    const normalizedBody = cleanString(bodyText);
+    if (!normalizedBody) {
+      return `provider response HTTP ${status}`;
+    }
+    return `provider response HTTP ${status}:\n${sanitizeSecretText(normalizedBody)}`;
+  }
+
+  function sanitizeSecretText(value) {
+    return String(value)
+      .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1<redacted>")
+      .replace(/\b(Basic\s+)[A-Za-z0-9+/=]+/gi, "$1<redacted>")
+      .replace(/\bsk-[A-Za-z0-9._-]+/g, "<redacted>")
+      .replace(/\b(apiKey|password|token|secret)\b\s*([:=])\s*("[^"]*"|'[^']*'|[^\s,;]+)/gi, (_match, key, separator) => {
+        return `${key}${separator}<redacted>`;
+      });
   }
 
   window.WorkbenchProviderConnection = {

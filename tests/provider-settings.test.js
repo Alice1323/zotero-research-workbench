@@ -230,6 +230,42 @@ test("provider settings connection failures show layered technical details witho
   assert.doesNotMatch(document.errorDetailText.textContent, /sk-test-secret/);
 });
 
+test("provider settings connection failures show provider response details without secrets", async () => {
+  const store = new Map([
+    ["extensions.zotero-research-workbench.provider.baseUrl", "https://api.example.test/v1"],
+    ["extensions.zotero-research-workbench.provider.apiKey", "sk-test-secret"],
+    ["extensions.zotero-research-workbench.provider.model", "moonshot-v1"]
+  ]);
+  const storage = {
+    get(key) {
+      return store.get(key);
+    },
+    set(key, value) {
+      store.set(key, value);
+    }
+  };
+  const document = createFakeDocument({ baseUrl: "", apiKey: "", model: "" });
+
+  createProviderSettingsController({
+    document,
+    storage,
+    testConnection: async () => ({
+      ok: false,
+      message: "连接失败（HTTP 503）",
+      details: "provider response HTTP 503: upstream overloaded for sk-test-secret"
+    })
+  }).init();
+
+  await document.testButton.click();
+
+  assert.equal(document.status.textContent, "连接失败（HTTP 503）");
+  assert.equal(document.errorDetails.hidden, false);
+  assert.equal(document.errorDetailText.textContent.startsWith("provider response HTTP 503"), true);
+  assert.match(document.errorDetailText.textContent, /provider response HTTP 503/);
+  assert.match(document.errorDetailText.textContent, /upstream overloaded/);
+  assert.doesNotMatch(document.errorDetailText.textContent, /sk-test-secret/);
+});
+
 test("provider settings connection exceptions show fallback message and redacted details", async () => {
   const store = new Map([
     ["extensions.zotero-research-workbench.provider.baseUrl", "https://api.example.test/v1"],
