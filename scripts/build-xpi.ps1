@@ -45,6 +45,9 @@ Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/workbenchFileRuntime.js
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/workbenchFileIo.js") -Destination (Join-Path $packageDir "chrome/content/workbenchFileIo.js")
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/workbenchSelectedPaper.js") -Destination (Join-Path $packageDir "chrome/content/workbenchSelectedPaper.js")
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/workbenchFetchRuntime.js") -Destination (Join-Path $packageDir "chrome/content/workbenchFetchRuntime.js")
+Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/providerRequestPolicy.js") -Destination (Join-Path $packageDir "chrome/content/providerRequestPolicy.js")
+Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/aiTaskWorkspace.js") -Destination (Join-Path $packageDir "chrome/content/aiTaskWorkspaceCore.js")
+Copy-Item -LiteralPath (Join-Path $projectRoot "chrome/content/aiTaskWorkspace.js") -Destination (Join-Path $packageDir "chrome/content")
 Copy-Item -LiteralPath (Join-Path $projectRoot "chrome/content/paperSummary.js") -Destination (Join-Path $packageDir "chrome/content")
 
 if (Test-Path $xpiPath) {

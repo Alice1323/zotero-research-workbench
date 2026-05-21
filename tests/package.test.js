@@ -49,6 +49,11 @@ test("build script exists and documents the runtime package boundary", () => {
   assert.match(script, /workbenchSelectedPaper\.js/);
   assert.match(script, /src\/core\/workbenchFetchRuntime\.js/);
   assert.match(script, /workbenchFetchRuntime\.js/);
+  assert.match(script, /src\/core\/providerRequestPolicy\.js/);
+  assert.match(script, /providerRequestPolicy\.js/);
+  assert.match(script, /src\/core\/aiTaskWorkspace\.js/);
+  assert.match(script, /aiTaskWorkspaceCore\.js/);
+  assert.match(script, /chrome\/content\/aiTaskWorkspace\.js/);
   assert.match(script, /paperSummary\.js/);
   assert.match(script, /readingContext\.js/);
   assert.match(script, /dist/);
@@ -76,6 +81,9 @@ test(
     assert.match(listing, /chrome\/content\/workbenchLocalStoreTransaction\.js/);
     assert.match(listing, /chrome\/content\/graphReviewWorkflow\.js/);
     assert.match(listing, /chrome\/content\/researchPanelOrchestrator\.js/);
+    assert.match(listing, /chrome\/content\/providerRequestPolicy\.js/);
+    assert.match(listing, /chrome\/content\/aiTaskWorkspaceCore\.js/);
+    assert.match(listing, /chrome\/content\/aiTaskWorkspace\.js/);
 
     const panel = childProcess.execFileSync(
       "tar",
@@ -94,6 +102,9 @@ test(
     assert.ok(panel.indexOf("graphReviewWorkflow.js") < panel.indexOf("paperSummary.js"));
     assert.ok(panel.indexOf("graphReviewWorkflow.js") < panel.indexOf("researchPanelOrchestrator.js"));
     assert.ok(panel.indexOf("researchPanelOrchestrator.js") < panel.indexOf("paperSummary.js"));
+    assert.ok(panel.indexOf("providerRequestPolicy.js") < panel.indexOf("aiTaskWorkspaceCore.js"));
+    assert.ok(panel.indexOf("aiTaskWorkspaceCore.js") < panel.indexOf("aiTaskWorkspace.js"));
+    assert.ok(panel.indexOf("aiTaskWorkspace.js") < panel.indexOf("paperSummary.js"));
 
     const packagedRuntime = childProcess.execFileSync(
       "tar",
