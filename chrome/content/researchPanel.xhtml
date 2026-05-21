@@ -170,6 +170,11 @@
         margin-block: 10px 12px;
       }
 
+      .compact-fields {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 180px));
+        align-items: end;
+      }
+
       .filter-control {
         display: grid;
         gap: 4px;
@@ -316,6 +321,48 @@
           <div id="selected-paper-pdf" class="paper-meta">PDF 附件：未找到 PDF 附件</div>
           <div id="selected-paper-abstract" class="paper-abstract"></div>
         </div>
+        <section id="ai-task-workspace">
+          <div class="section-header">
+            <strong>AI 任务工作台</strong>
+            <span id="ai-job-progress" class="status">尚未创建任务</span>
+          </div>
+          <label>
+            任务需求
+            <textarea id="ai-job-request" rows="4" placeholder="例如：请总结当前选中的文献，并保留失败或跳过原因"></textarea>
+          </label>
+          <div class="field-grid compact-fields">
+            <label>
+              并发上限
+              <input id="ai-job-concurrency-limit" type="number" min="1" max="8" value="1" />
+            </label>
+          </div>
+          <div class="actions">
+            <button id="ai-job-create-plan" type="button">生成任务计划</button>
+            <button id="ai-job-confirm-start" type="button" class="primary-action" disabled="disabled">确认并开始</button>
+            <button id="ai-job-pause" type="button" disabled="disabled">暂停任务</button>
+            <button id="ai-job-resume" type="button" disabled="disabled">继续任务</button>
+            <button id="ai-job-cancel" type="button" disabled="disabled">取消任务</button>
+          </div>
+          <div id="ai-job-plan-preview" class="record-list" aria-live="polite">
+            <div class="record-item">计划预览：暂无任务计划</div>
+          </div>
+          <div class="section-header">
+            <strong>任务队列</strong>
+            <span id="ai-task-queue-summary" class="status">成功 0 · 跳过 0 · 失败 0</span>
+          </div>
+          <div id="ai-task-queue-list" class="record-list">
+            <div class="record-item">暂无任务队列</div>
+          </div>
+          <div id="ai-job-diagnosis" class="record-list" hidden="hidden">
+            <div class="record-item">失败诊断：暂无</div>
+          </div>
+          <div class="section-header">
+            <strong>可继续任务</strong>
+          </div>
+          <div id="ai-job-resume-list" class="record-list">
+            <div class="record-item">暂无可继续任务</div>
+          </div>
+        </section>
         <div class="actions">
           <button id="refresh-paper-context" type="button">刷新当前上下文</button>
           <button id="summarize-selected-paper" type="button">总结选中文献</button>

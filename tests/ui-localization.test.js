@@ -47,6 +47,21 @@ test("research panel exposes Chinese LLM provider settings", () => {
     "Zotero 研究工作台",
     "研究面板",
     "选中文献",
+    "AI 任务工作台",
+    "任务需求",
+    "生成任务计划",
+    "计划预览",
+    "确认并开始",
+    "暂停任务",
+    "继续任务",
+    "取消任务",
+    "并发上限",
+    "任务队列",
+    "失败诊断",
+    "可继续任务",
+    "成功",
+    "跳过",
+    "失败",
     "PDF 附件",
     "未找到 PDF 附件",
     "阅读上下文",
@@ -151,6 +166,19 @@ test("research panel exposes Chinese LLM provider settings", () => {
   assert.match(panel, /class="section-header"/);
   assert.match(panel, /class="option-help-toggle"/);
   assert.match(panel, /id="selected-paper-pdf"/);
+  assert.match(panel, /id="ai-task-workspace"/);
+  assert.match(panel, /id="ai-job-request"/);
+  assert.match(panel, /id="ai-job-concurrency-limit"/);
+  assert.match(panel, /id="ai-job-create-plan"/);
+  assert.match(panel, /id="ai-job-plan-preview"/);
+  assert.match(panel, /id="ai-job-confirm-start"/);
+  assert.match(panel, /id="ai-job-pause"/);
+  assert.match(panel, /id="ai-job-resume"/);
+  assert.match(panel, /id="ai-job-cancel"/);
+  assert.match(panel, /id="ai-job-progress"/);
+  assert.match(panel, /id="ai-task-queue-list"/);
+  assert.match(panel, /id="ai-job-diagnosis"/);
+  assert.match(panel, /id="ai-job-resume-list"/);
   assert.match(panel, /id="save-paper-summary-note"/);
   assert.match(panel, /class="primary-action"/);
   assert.match(panel, /id="refresh-reading-context"/);
