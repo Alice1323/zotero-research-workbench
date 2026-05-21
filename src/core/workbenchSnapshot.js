@@ -110,7 +110,13 @@ function normalizeSnapshotForImport(snapshot) {
     researchNoteDrafts: Array.isArray(snapshot.researchNoteDrafts) ? snapshot.researchNoteDrafts : [],
     graphSeeds: Array.isArray(snapshot.graphSeeds) ? snapshot.graphSeeds : [],
     citationRelations: Array.isArray(snapshot.citationRelations) ? snapshot.citationRelations : [],
-    taskLedger: Array.isArray(snapshot.taskLedger) ? snapshot.taskLedger : []
+    taskLedger: Array.isArray(snapshot.taskLedger) ? snapshot.taskLedger : [],
+    aiJobs: Array.isArray(snapshot.aiJobs) ? snapshot.aiJobs : [],
+    aiTasks: Array.isArray(snapshot.aiTasks) ? snapshot.aiTasks : [],
+    aiTaskResults: Array.isArray(snapshot.aiTaskResults) ? snapshot.aiTaskResults : [],
+    aiTaskFailures: Array.isArray(snapshot.aiTaskFailures) ? snapshot.aiTaskFailures : [],
+    aiTaskSkips: Array.isArray(snapshot.aiTaskSkips) ? snapshot.aiTaskSkips : [],
+    aiJobDiagnoses: Array.isArray(snapshot.aiJobDiagnoses) ? snapshot.aiJobDiagnoses : []
   };
 }
 

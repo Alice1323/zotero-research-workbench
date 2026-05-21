@@ -62,6 +62,41 @@ test("workbench snapshot module imports package strings into normalized arrays",
   assert.deepEqual(restored.taskLedger, []);
 });
 
+test("normalizeSnapshotForImport preserves ai task workspace records", () => {
+  const snapshot = normalizeSnapshotForImport({
+    schemaVersion: 1,
+    exportedAt: "2026-05-22T00:00:00.000Z",
+    aiJobs: [{ id: "job-1", state: "paused", resumeRequired: true }],
+    aiTasks: [{ id: "task-1", jobId: "job-1", state: "queued" }],
+    aiTaskResults: [{ taskId: "task-1", content: "summary" }],
+    aiTaskFailures: [{ taskId: "task-2", errorReason: "PDF unreadable" }],
+    aiTaskSkips: [{ taskId: "task-2", reason: "recoverable-failure" }],
+    aiJobDiagnoses: [{ jobId: "job-1", reason: "systemic-provider-failure" }]
+  });
+
+  assert.deepEqual(snapshot.aiJobs, [{ id: "job-1", state: "paused", resumeRequired: true }]);
+  assert.deepEqual(snapshot.aiTasks, [{ id: "task-1", jobId: "job-1", state: "queued" }]);
+  assert.deepEqual(snapshot.aiTaskResults, [{ taskId: "task-1", content: "summary" }]);
+  assert.deepEqual(snapshot.aiTaskFailures, [{ taskId: "task-2", errorReason: "PDF unreadable" }]);
+  assert.deepEqual(snapshot.aiTaskSkips, [{ taskId: "task-2", reason: "recoverable-failure" }]);
+  assert.deepEqual(snapshot.aiJobDiagnoses, [{ jobId: "job-1", reason: "systemic-provider-failure" }]);
+});
+
+test("createWorkbenchExportPackage redacts secret material inside ai task workspace records", () => {
+  const exported = createWorkbenchExportPackage({
+    exportedAt: "2026-05-22T00:01:00.000Z",
+    snapshot: {
+      schemaVersion: 1,
+      exportedAt: "old",
+      aiJobs: [{ id: "job-1", requestText: "summarize", apiKey: "<redacted>" }],
+      aiTaskFailures: [{ taskId: "task-1", authorization: "<redacted>" }]
+    }
+  });
+
+  assert.equal(exported.snapshot.aiJobs[0].apiKey, SECRET_PLACEHOLDER);
+  assert.equal(exported.snapshot.aiTaskFailures[0].authorization, SECRET_PLACEHOLDER);
+});
+
 test("workbench snapshot module wraps ZIP payloads around JSON export packages", () => {
   const payload = createWorkbenchZipExportPayload({
     snapshot: {
