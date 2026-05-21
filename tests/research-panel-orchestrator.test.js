@@ -154,6 +154,61 @@ test("graph review actions return updated records for panel refresh", () => {
   assert.equal(promoted.records.recentGraphSeeds[0].id, "seed-1");
 });
 
+test("ai task workspace workflows create confirm and record a current-selection job", () => {
+  const orchestrator = createResearchPanelOrchestrator();
+  const snapshot = createSnapshot();
+
+  const draft = orchestrator.createAiTaskWorkspacePlanWorkflow({
+    snapshot,
+    requestText: "请总结当前选中的文献",
+    selectedPapers: [
+      {
+        key: "ITEM1",
+        title: "Task Paper",
+        authors: "Li Wang",
+        year: "2026",
+        publicationTitle: "Journal",
+        abstractNote: "abstract",
+        doi: "10.1000/task"
+      }
+    ],
+    provider: { id: "provider", model: "model" },
+    concurrencyLimit: 1,
+    createdAt: "2026-05-22T04:00:00.000Z"
+  });
+
+  assert.equal(draft.status, "aiJobPlanCreated");
+  assert.equal(draft.plan.job.state, "draft");
+  assert.equal(draft.snapshot.aiJobs.length, 1);
+  assert.equal(draft.records.aiTaskWorkspace.activeJob.id, draft.plan.job.id);
+
+  const confirmed = orchestrator.confirmAiTaskWorkspacePlanWorkflow({
+    snapshot: draft.snapshot,
+    jobId: draft.plan.job.id,
+    confirmedAt: "2026-05-22T04:01:00.000Z"
+  });
+
+  assert.equal(confirmed.status, "aiJobConfirmed");
+  assert.equal(confirmed.snapshot.aiJobs[0].state, "confirmed");
+
+  const recorded = orchestrator.recordAiTaskWorkspaceQueueResultWorkflow({
+    snapshot: confirmed.snapshot,
+    queueResult: {
+      job: { ...confirmed.snapshot.aiJobs[0], state: "completed" },
+      tasks: [{ ...confirmed.snapshot.aiTasks[0], state: "succeeded" }],
+      results: [{ jobId: draft.plan.job.id, taskId: confirmed.snapshot.aiTasks[0].id, content: "summary" }],
+      failures: [],
+      skips: [],
+      diagnoses: []
+    },
+    recordedAt: "2026-05-22T04:02:00.000Z"
+  });
+
+  assert.equal(recorded.status, "aiTaskQueueRecorded");
+  assert.equal(recorded.records.aiTaskWorkspace.activeJob.state, "completed");
+  assert.equal(recorded.records.aiTaskWorkspace.progress.succeeded, 1);
+});
+
 test("research panel orchestrator browser script registers a factory without global collisions", () => {
   const context = {
     console,
@@ -163,6 +218,8 @@ test("research panel orchestrator browser script registers a factory without glo
   vm.createContext(context);
 
   for (const fileName of [
+    "providerRequestPolicy.js",
+    "aiTaskWorkspace.js",
     "workbenchLocalStoreTransaction.js",
     "graphSeed.js",
     "workIdentity.js",

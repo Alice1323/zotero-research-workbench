@@ -3,10 +3,12 @@
     const paperSummaryModule = resolvePaperSummaryModule(dependencies.paperSummaryModule);
     const graphReviewWorkflowModule = resolveGraphReviewWorkflowModule(dependencies.graphReviewWorkflowModule);
     const transactionModule = resolveTransactionModule(dependencies.transactionModule);
+    const aiTaskWorkspaceModule = resolveAiTaskWorkspaceModule(dependencies.aiTaskWorkspaceModule);
 
     assertPaperSummaryModule(paperSummaryModule);
     assertGraphReviewWorkflowModule(graphReviewWorkflowModule);
     assertTransactionModule(transactionModule);
+    assertAiTaskWorkspaceModule(aiTaskWorkspaceModule);
 
     function createSummaryDraftWorkflow({
       snapshot,
@@ -163,6 +165,53 @@
       };
     }
 
+    function createAiTaskWorkspacePlanWorkflow({
+      snapshot,
+      requestText,
+      selectedPapers,
+      provider,
+      concurrencyLimit,
+      createdAt
+    } = {}) {
+      const plan = aiTaskWorkspaceModule.createCurrentSelectionAiJobPlan({
+        requestText,
+        selectedPapers,
+        provider,
+        concurrencyLimit,
+        createdAt
+      });
+      const result = transactionModule.createAiJobPlanTransaction({
+        snapshot,
+        plan,
+        createdAt
+      });
+      return {
+        status: "aiJobPlanCreated",
+        plan,
+        snapshot: result.snapshot,
+        records: createPanelRecords(result.snapshot, {})
+      };
+    }
+
+    function confirmAiTaskWorkspacePlanWorkflow({ snapshot, jobId, confirmedAt } = {}) {
+      const result = transactionModule.confirmAiJobPlanTransaction({ snapshot, jobId, confirmedAt });
+      return {
+        status: "aiJobConfirmed",
+        jobId,
+        snapshot: result.snapshot,
+        records: createPanelRecords(result.snapshot, {})
+      };
+    }
+
+    function recordAiTaskWorkspaceQueueResultWorkflow({ snapshot, queueResult, recordedAt } = {}) {
+      const result = transactionModule.recordAiTaskQueueResultTransaction({ snapshot, queueResult, recordedAt });
+      return {
+        status: "aiTaskQueueRecorded",
+        snapshot: result.snapshot,
+        records: createPanelRecords(result.snapshot, {})
+      };
+    }
+
     function createPanelRecords(snapshot, { selectedWorkId, filters } = {}) {
       return {
         recentDrafts: paperSummaryModule.listRecentSummaryDrafts(snapshot),
@@ -172,18 +221,22 @@
           snapshot,
           selectedWorkId,
           filters
-        })
+        }),
+        aiTaskWorkspace: aiTaskWorkspaceModule.createAiTaskWorkspaceReadModel(snapshot)
       };
     }
 
     return {
       captureGraphSeedWorkflow,
+      confirmAiTaskWorkspacePlanWorkflow,
       confirmDraftSavedToZoteroWorkflow,
+      createAiTaskWorkspacePlanWorkflow,
       createPanelRecords,
       createReadingTranslationDraftWorkflow,
       createSummaryDraftWorkflow,
       prepareZoteroNoteWrite,
       promoteGraphSeedWorkflow,
+      recordAiTaskWorkspaceQueueResultWorkflow,
       reviewGraphSeedWorkflow
     };
   }
@@ -224,6 +277,19 @@
     return null;
   }
 
+  function resolveAiTaskWorkspaceModule(moduleOverride) {
+    if (moduleOverride) {
+      return moduleOverride;
+    }
+    if (typeof require === "function") {
+      return require("./aiTaskWorkspace");
+    }
+    if (typeof window !== "undefined") {
+      return window.WorkbenchAiTaskWorkspace;
+    }
+    return null;
+  }
+
   function assertPaperSummaryModule(moduleValue) {
     assertFunction(moduleValue, "buildZoteroNoteHtml", "WorkbenchPaperSummary core Module");
     assertFunction(moduleValue, "createReadingTranslationDraftInput", "WorkbenchPaperSummary core Module");
@@ -241,8 +307,16 @@
   }
 
   function assertTransactionModule(moduleValue) {
+    assertFunction(moduleValue, "confirmAiJobPlanTransaction", "WorkbenchLocalStoreTransaction Module");
     assertFunction(moduleValue, "confirmResearchNoteDraftSavedToZoteroTransaction", "WorkbenchLocalStoreTransaction Module");
+    assertFunction(moduleValue, "createAiJobPlanTransaction", "WorkbenchLocalStoreTransaction Module");
     assertFunction(moduleValue, "createResearchNoteDraftTransaction", "WorkbenchLocalStoreTransaction Module");
+    assertFunction(moduleValue, "recordAiTaskQueueResultTransaction", "WorkbenchLocalStoreTransaction Module");
+  }
+
+  function assertAiTaskWorkspaceModule(moduleValue) {
+    assertFunction(moduleValue, "createAiTaskWorkspaceReadModel", "WorkbenchAiTaskWorkspace Module");
+    assertFunction(moduleValue, "createCurrentSelectionAiJobPlan", "WorkbenchAiTaskWorkspace Module");
   }
 
   function assertFunction(moduleValue, functionName, moduleName) {

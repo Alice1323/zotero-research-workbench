@@ -5,7 +5,7 @@ const ProviderRequestPolicy =
       ? window.WorkbenchProviderRequestPolicy
       : null;
 
-const { normalizeProviderConcurrencyLimit } = ProviderRequestPolicy || {
+const { normalizeProviderConcurrencyLimit: normalizeConcurrencyLimit } = ProviderRequestPolicy || {
   normalizeProviderConcurrencyLimit: (value) => Math.min(8, Math.max(1, Math.round(Number(value) || 1)))
 };
 
@@ -45,7 +45,7 @@ function createCurrentSelectionAiJobPlan({ requestText, selectedPapers, provider
     id: cleanText(provider?.id) || "default-provider",
     model: cleanText(provider?.model) || "未记录"
   };
-  const limit = normalizeProviderConcurrencyLimit(concurrencyLimit);
+  const limit = normalizeConcurrencyLimit(concurrencyLimit);
   const tasks = papers.map((paper, index) => ({
     id: `${jobId}-task-${String(index + 1).padStart(3, "0")}`,
     jobId,
@@ -182,6 +182,33 @@ function createManualResumeReadModel({ aiJobs, aiTasks } = {}) {
   };
 }
 
+function createAiTaskWorkspaceReadModel(snapshot = {}) {
+  const jobs = Array.isArray(snapshot.aiJobs) ? snapshot.aiJobs : [];
+  const tasks = Array.isArray(snapshot.aiTasks) ? snapshot.aiTasks : [];
+  const activeJob =
+    jobs
+      .slice()
+      .reverse()
+      .find((job) => !["completed", "completed-with-skips", "failed", "cancelled"].includes(job.state)) ||
+    jobs.at(-1) ||
+    null;
+  const activeTasks = activeJob ? tasks.filter((task) => task.jobId === activeJob.id) : [];
+  return {
+    activeJob,
+    activeTasks,
+    progress: {
+      total: activeTasks.length,
+      queued: activeTasks.filter((task) => task.state === "queued").length,
+      running: activeTasks.filter((task) => task.state === "running" || task.state === "retrying").length,
+      succeeded: activeTasks.filter((task) => task.state === "succeeded").length,
+      skipped: activeTasks.filter((task) => task.state === "skipped").length,
+      failed: activeTasks.filter((task) => task.state === "failed").length,
+      cancelled: activeTasks.filter((task) => task.state === "cancelled").length
+    },
+    resumableJobs: createManualResumeReadModel({ aiJobs: jobs, aiTasks: tasks }).resumableJobs
+  };
+}
+
 async function runAiTaskQueue({ job, tasks, executeTask, classifyFailure, now } = {}) {
   if (typeof executeTask !== "function") {
     throw new Error("AI Task Queue 缺少任务执行器");
@@ -202,7 +229,7 @@ async function runAiTaskQueue({ job, tasks, executeTask, classifyFailure, now } 
   const failures = [];
   const skips = [];
   const diagnoses = [];
-  const limit = normalizeProviderConcurrencyLimit(nextJob.providerConcurrencyLimit);
+  const limit = normalizeConcurrencyLimit(nextJob.providerConcurrencyLimit);
   let cursor = 0;
   let stopped = false;
   let consecutiveFailures = 0;
@@ -347,6 +374,7 @@ const WorkbenchAiTaskWorkspace = {
   AI_JOB_STATES,
   AI_TASK_STATES,
   cancelAiJob,
+  createAiTaskWorkspaceReadModel,
   confirmAiJobPlan,
   createCurrentSelectionAiJobPlan,
   createManualResumeReadModel,
