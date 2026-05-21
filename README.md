@@ -19,6 +19,12 @@ This repository starts with a small, testable core and a Zotero plugin shell. Th
 
 The first implementation slice contains:
 
+- an AI Task Workspace for current-selection jobs;
+- natural-language task request entry in the Research Panel;
+- AI Job Plan preview with explicit confirmation before provider calls;
+- visible AI Task Queue with provider concurrency limit;
+- retry twice, visible Task Skip, Job Failure Diagnosis, pause/resume/cancel controls;
+- manual resume display for interrupted jobs without automatic background continuation;
 - Zotero plugin metadata and startup hooks;
 - a Chinese Research Panel that reads the currently selected Zotero item;
 - a Chinese LLM Provider settings section that saves to Zotero preferences;
@@ -47,7 +53,7 @@ npm run check
 npm run package
 ```
 
-The package command writes `dist/zotero-research-workbench-0.2.0.xpi`.
+The package command writes `dist/zotero-research-workbench-0.3.0-beta.1.xpi`.
 
 ## First Release QA
 
