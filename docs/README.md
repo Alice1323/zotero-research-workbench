@@ -80,6 +80,10 @@ Design specs describe intended behavior and boundaries before implementation.
 
 Implementation plans are step-by-step execution documents for agentic workers.
 
+### v0.4
+
+- [v0.4 Literature Discovery Import Pipeline Plan](./superpowers/plans/2026-05-23-v04-literature-discovery-import-pipeline.md)
+
 ### v0.3
 
 - [v0.3 AI Task Workspace Slice 1 Plan](./superpowers/plans/2026-05-22-v03-ai-task-workspace-slice1.md)
