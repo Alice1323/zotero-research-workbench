@@ -379,10 +379,16 @@ test("research panel loads v0.4 literature discovery runtime modules", () => {
 
 test("research panel runtime wires v0.4 pipeline skeleton actions", () => {
   const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
+  const createPlanBody = getFunctionBody(runtime, "createLiteratureDiscoveryPlan");
 
   assert.match(runtime, /function createLiteratureDiscoveryPlan/);
   assert.match(runtime, /function renderDocumentCandidateReview/);
   assert.match(runtime, /function renderZoteroWriteQueue/);
+  assert.match(runtime, /function readLiteratureDiscoverySources/);
+  assert.match(createPlanBody, /ResearchPanelOrchestrator\.createLiteratureDiscoveryPlanWorkflow/);
+  assert.match(createPlanBody, /WorkbenchLiteratureDiscoveryPlan/);
+  assert.match(runtime, /计划预览：来源/);
+  assert.match(runtime, /不会自动写入 Zotero/);
   assert.match(runtime, /literature-discovery-create-plan"\)\.addEventListener\("click", createLiteratureDiscoveryPlan\)/);
 });
 

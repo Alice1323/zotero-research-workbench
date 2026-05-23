@@ -42,6 +42,11 @@
     replaceWorkbenchSnapshotFromImportTransaction,
     upsertPromptOverrideTransaction
   } = WorkbenchLocalStoreTransaction;
+  const WorkbenchResearchTopic = window.WorkbenchResearchTopic;
+  if (!WorkbenchResearchTopic) {
+    throw new Error("WorkbenchResearchTopic runtime Module is unavailable");
+  }
+  const { createResearchTopicInput } = WorkbenchResearchTopic;
   const WorkbenchGraphReviewWorkflow = window.WorkbenchGraphReviewWorkflow;
   if (!WorkbenchGraphReviewWorkflow) {
     throw new Error("WorkbenchGraphReviewWorkflow runtime Module is unavailable");
@@ -1121,17 +1126,68 @@
   }
 
   function createLiteratureDiscoveryPlan() {
+    const createdAt = new Date().toISOString();
+    const snapshot = loadWorkbenchSnapshot();
+    const requestText = cleanText(getField("literature-discovery-request")?.value);
+    const sourceScopes = requestText ? [{ kind: "panel-query", query: requestText }] : [];
+    const topic = createResearchTopicInput({
+      title: getField("research-topic-title")?.value,
+      description: getField("research-topic-description")?.value,
+      sourceScopes,
+      createdAt,
+      existingTopicIds: (snapshot.researchTopics || []).map((entry) => entry.id)
+    });
+    const result = ResearchPanelOrchestrator.createLiteratureDiscoveryPlanWorkflow({
+      snapshot: {
+        ...snapshot,
+        researchTopics: [...(Array.isArray(snapshot.researchTopics) ? snapshot.researchTopics : []), topic]
+      },
+      topicId: topic.id,
+      requestText,
+      launchSurface: "research-panel",
+      sourceScopes,
+      sources: readLiteratureDiscoverySources(),
+      createdAt
+    });
+    saveWorkbenchSnapshot(result.snapshot);
+    window.WorkbenchLiteratureDiscoveryPlan = result.plan;
+    renderLiteratureDiscoveryPlanPreview(result.plan);
+    renderDocumentCandidateReview(result.records.candidateReview);
+    renderZoteroWriteQueue(result.records.zoteroWriteQueue);
+  }
+
+  function readLiteratureDiscoverySources() {
+    const sources = [];
+    for (const [fieldId, sourceId] of [
+      ["literature-source-openalex", "openalex"],
+      ["literature-source-crossref", "crossref"],
+      ["literature-source-unpaywall", "unpaywall"],
+      ["literature-source-http-connector", "http-connector"]
+    ]) {
+      if (getField(fieldId)?.checked) {
+        sources.push(sourceId);
+      }
+    }
+    return sources;
+  }
+
+  function renderLiteratureDiscoveryPlanPreview(plan) {
     const preview = getField("literature-discovery-plan-preview");
     if (!preview) {
       return;
     }
     clearElement(preview);
+    const detail = plan?.job
+      ? `计划预览：来源 ${plan.job.sources.join("、")}｜最多候选 ${plan.job.maxCandidates}｜不会自动写入 Zotero`
+      : "暂无发现计划";
     appendRecordItem(preview, {
       title: "发现计划",
-      meta: "待确认",
-      detail: "发现计划将在确认后查询来源；不会自动写入 Zotero。"
+      meta: plan?.job?.state || "待确认",
+      detail
     });
-    getField("literature-discovery-confirm-search")?.removeAttribute("disabled");
+    if (plan?.job) {
+      getField("literature-discovery-confirm-search")?.removeAttribute("disabled");
+    }
   }
 
   function renderDocumentCandidateReview(readModel) {

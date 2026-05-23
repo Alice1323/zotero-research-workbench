@@ -5,7 +5,11 @@
     const transactionModule = resolveTransactionModule(dependencies.transactionModule);
     const aiTaskWorkspaceModule = resolveAiTaskWorkspaceModule(dependencies.aiTaskWorkspaceModule);
     const literatureDiscoveryModule = resolveLiteratureDiscoveryModule(dependencies.literatureDiscoveryModule);
-    const candidateReviewModule = resolveCandidateReviewModule(dependencies.candidateReviewModule);
+    const candidateReviewModule = resolveCandidateReviewModule(
+      dependencies.documentCandidateReviewModule || dependencies.candidateReviewModule
+    );
+    const zoteroWriteQueueModule = resolveZoteroWriteQueueModule(dependencies.zoteroWriteQueueModule);
+    const etherealReferenceGraphModule = resolveEtherealReferenceGraphModule(dependencies.etherealReferenceGraphModule);
 
     assertPaperSummaryModule(paperSummaryModule);
     assertGraphReviewWorkflowModule(graphReviewWorkflowModule);
@@ -13,6 +17,8 @@
     assertAiTaskWorkspaceModule(aiTaskWorkspaceModule);
     assertLiteratureDiscoveryModule(literatureDiscoveryModule);
     assertCandidateReviewModule(candidateReviewModule);
+    assertZoteroWriteQueueModule(zoteroWriteQueueModule);
+    assertEtherealReferenceGraphModule(etherealReferenceGraphModule);
 
     function createSummaryDraftWorkflow({
       snapshot,
@@ -308,7 +314,9 @@
         }),
         aiTaskWorkspace: aiTaskWorkspaceModule.createAiTaskWorkspaceReadModel(snapshot),
         literatureDiscovery: literatureDiscoveryModule.createLiteratureDiscoveryReadModel(snapshot, { topicId }),
-        candidateReview: candidateReviewModule.createCandidateReviewReadModel(snapshot, { topicId })
+        candidateReview: candidateReviewModule.createCandidateReviewReadModel(snapshot, { topicId }),
+        zoteroWriteQueue: zoteroWriteQueueModule.createZoteroWriteQueueReadModel(snapshot, { topicId }),
+        etherealReference: etherealReferenceGraphModule.createEtherealReferenceReadModel(snapshot, { topicId })
       };
     }
 
@@ -405,6 +413,32 @@
     return null;
   }
 
+  function resolveZoteroWriteQueueModule(moduleOverride) {
+    if (moduleOverride) {
+      return moduleOverride;
+    }
+    if (typeof require === "function") {
+      return require("./zoteroWriteQueue");
+    }
+    if (typeof window !== "undefined") {
+      return window.WorkbenchZoteroWriteQueue;
+    }
+    return null;
+  }
+
+  function resolveEtherealReferenceGraphModule(moduleOverride) {
+    if (moduleOverride) {
+      return moduleOverride;
+    }
+    if (typeof require === "function") {
+      return require("./etherealReferenceGraph");
+    }
+    if (typeof window !== "undefined") {
+      return window.WorkbenchEtherealReferenceGraph;
+    }
+    return null;
+  }
+
   function assertPaperSummaryModule(moduleValue) {
     assertFunction(moduleValue, "buildZoteroNoteHtml", "WorkbenchPaperSummary core Module");
     assertFunction(moduleValue, "createReadingTranslationDraftInput", "WorkbenchPaperSummary core Module");
@@ -447,6 +481,14 @@
   function assertCandidateReviewModule(moduleValue) {
     assertFunction(moduleValue, "createCandidateReviewReadModel", "WorkbenchDocumentCandidateReview Module");
     assertFunction(moduleValue, "createZoteroImportPlanFromCandidates", "WorkbenchDocumentCandidateReview Module");
+  }
+
+  function assertZoteroWriteQueueModule(moduleValue) {
+    assertFunction(moduleValue, "createZoteroWriteQueueReadModel", "WorkbenchZoteroWriteQueue Module");
+  }
+
+  function assertEtherealReferenceGraphModule(moduleValue) {
+    assertFunction(moduleValue, "createEtherealReferenceReadModel", "WorkbenchEtherealReferenceGraph Module");
   }
 
   function assertFunction(moduleValue, functionName, moduleName) {

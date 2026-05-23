@@ -315,6 +315,16 @@ test("literature discovery workflow creates a draft plan and read model", () => 
         candidateCount: 0
       })
     },
+    documentCandidateReviewModule: {
+      createCandidateReviewReadModel: () => ({ candidates: [], summary: { blockedCount: 0 } }),
+      createZoteroImportPlanFromCandidates() {}
+    },
+    zoteroWriteQueueModule: {
+      createZoteroWriteQueueReadModel: () => ({ entries: [{ id: "write-a" }] })
+    },
+    etherealReferenceGraphModule: {
+      createEtherealReferenceReadModel: () => ({ featureState: "reserved-for-v0.5", nodes: [] })
+    },
     transactionModule: {
       confirmAiJobPlanTransaction() {},
       confirmResearchNoteDraftSavedToZoteroTransaction() {},
@@ -345,6 +355,9 @@ test("literature discovery workflow creates a draft plan and read model", () => 
   assert.equal(result.status, "literatureDiscoveryPlanCreated");
   assert.equal(result.plan.job.id, "job-a");
   assert.equal(result.records.literatureDiscovery.jobs[0].id, "job-a");
+  assert.equal(result.records.candidateReview.summary.blockedCount, 0);
+  assert.equal(result.records.zoteroWriteQueue.entries[0].id, "write-a");
+  assert.equal(result.records.etherealReference.featureState, "reserved-for-v0.5");
 });
 
 test("candidate review workflows update review state and create import plans", () => {
@@ -435,6 +448,8 @@ test("research panel orchestrator browser script registers a factory without glo
     "documentCandidateProtocol.js",
     "documentCandidateReview.js",
     "literatureDiscovery.js",
+    "zoteroWriteQueue.js",
+    "etherealReferenceGraph.js",
     "workbenchLocalStoreTransaction.js",
     "graphSeed.js",
     "workIdentity.js",
