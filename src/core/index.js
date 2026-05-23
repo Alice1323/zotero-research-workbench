@@ -16,6 +16,7 @@ const WorkbenchLiteratureDiscovery = require("./literatureDiscovery");
 const WorkbenchLiteratureSourceAdapters = require("./literatureSourceAdapters");
 const WorkbenchZoteroWriteQueue = require("./zoteroWriteQueue");
 const WorkbenchZoteroItemWriter = require("./zoteroItemWriter");
+const WorkbenchEtherealReferenceGraph = require("./etherealReferenceGraph");
 const WorkbenchProviderRequestPolicy = require("./providerRequestPolicy");
 const WorkbenchAiTaskWorkspace = require("./aiTaskWorkspace");
 
@@ -567,6 +568,7 @@ module.exports = {
   WorkbenchLiteratureSourceAdapters,
   WorkbenchZoteroWriteQueue,
   WorkbenchZoteroItemWriter,
+  WorkbenchEtherealReferenceGraph,
   WorkbenchLocalStore,
   buildWebDavDirectoryRequests,
   buildWebDavExportRequest,
