@@ -111,6 +111,7 @@ function normalizeSnapshotForImport(snapshot) {
     graphSeeds: Array.isArray(snapshot.graphSeeds) ? snapshot.graphSeeds : [],
     citationRelations: Array.isArray(snapshot.citationRelations) ? snapshot.citationRelations : [],
     taskLedger: Array.isArray(snapshot.taskLedger) ? snapshot.taskLedger : [],
+    researchTopics: Array.isArray(snapshot.researchTopics) ? snapshot.researchTopics : [],
     aiJobs: Array.isArray(snapshot.aiJobs) ? snapshot.aiJobs : [],
     aiTasks: Array.isArray(snapshot.aiTasks) ? snapshot.aiTasks : [],
     aiTaskResults: Array.isArray(snapshot.aiTaskResults) ? snapshot.aiTaskResults : [],

@@ -9,6 +9,7 @@ const {
 const WorkbenchLocalStoreTransaction = require("./workbenchLocalStoreTransaction");
 const WorkbenchGraphReviewWorkflow = require("./graphReviewWorkflow");
 const WorkbenchResearchPanelOrchestrator = require("./researchPanelOrchestrator");
+const WorkbenchResearchTopic = require("./researchTopic");
 const WorkbenchProviderRequestPolicy = require("./providerRequestPolicy");
 const WorkbenchAiTaskWorkspace = require("./aiTaskWorkspace");
 
@@ -553,6 +554,7 @@ module.exports = {
   WorkbenchLocalStoreTransaction,
   WorkbenchProviderRequestPolicy,
   WorkbenchResearchPanelOrchestrator,
+  WorkbenchResearchTopic,
   WorkbenchLocalStore,
   buildWebDavDirectoryRequests,
   buildWebDavExportRequest,
