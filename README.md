@@ -19,6 +19,12 @@ This repository starts with a small, testable core and a Zotero plugin shell. Th
 
 The first implementation slice contains:
 
+- a topic-centered v0.4 literature discovery and import pipeline;
+- OpenAlex, Crossref, Unpaywall, and HTTP connector source adapters normalized through one Document Candidate protocol;
+- candidate review with batch selection and anomaly blocking;
+- explicit Zotero item plus attachment import through a serial Zotero Write Queue;
+- top toolbar and item context-menu launch surfaces that open the same Research Panel pipeline;
+- Ethereal Reference data and UI reservation for a later relation-network analysis release;
 - an AI Task Workspace for current-selection jobs;
 - natural-language task request entry in the Research Panel;
 - AI Job Plan preview with explicit confirmation before provider calls;
@@ -137,6 +143,16 @@ For `multi-paper-commonality-note`, the prompt includes all selected paper metad
 The result is recorded as a standalone local Research Note Draft with `promptTaskTemplateId: multi-paper-commonality-note`. It appears in `最近草稿`, is automatically loaded into the main `生成结果` reading area after the task completes, and can then be explicitly saved to Zotero as a standalone note through `确认并写入 Zotero 笔记`. This path is not a per-paper translation or per-paper summary batch.
 
 AI Task Workspace job and task states are shown with Chinese user-facing labels such as `待确认`, `待执行`, `运行中`, and `已完成` instead of raw internal state names.
+
+## Literature Discovery Import Behavior
+
+The v0.4 pipeline starts from a `研究主题`, builds a draft discovery plan, and requires explicit confirmation before source queries. The supported source adapter set is OpenAlex, Crossref, Unpaywall, and an HTTP connector endpoint. HTTP connector settings are runtime inputs; local command connectors are reserved for a future release and are not executed in v0.4.
+
+Source results are normalized as Document Candidates with source provenance, identity keys, attachment references, and anomaly tags. The panel shows candidates in the three-lane pipeline: `启动`, `复核`, and `写入`. Normal candidates can be batch-selected into an import plan. Anomalous candidates are blocked from quick import until explicitly reviewed.
+
+Zotero item and attachment writes are never automatic. Selecting candidates creates a local Zotero Import Plan and a serial Zotero Write Queue. The queue writes one item or attachment at a time only after the user starts it. Supported attachment references are user-selected local PDFs, explicit open-access PDF URLs, and HTTP connector file references with provenance.
+
+The toolbar `研究工作台`, Tools menu fallback, and item context-menu `从选中文献发现相关文献` all open the same Research Panel flow. Ethereal Reference is visible as a reserved v0.5 area, but v0.4 does not render a force-directed graph or relation-network UI.
 
 ## Local Export Import Behavior
 

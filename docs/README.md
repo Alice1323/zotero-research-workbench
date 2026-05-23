@@ -15,10 +15,14 @@ This index is the entry point for project documentation. Use it to find the curr
 
 Recommended v0.4 implementation order:
 
-1. Slice 1: Research Topic container, Document Candidate protocol, and three-lane UI skeleton.
-2. Slice 2: OpenAlex, Crossref, Unpaywall, and HTTP connector source adapters with fixture-backed tests.
-3. Slice 3: candidate review, anomaly blocking, dedupe hints, and import plan generation.
-4. Slice 4: Zotero Write Queue, Zotero item/attachment writer adapters, top toolbar entry, context-menu entry, and Ethereal Reference reservation points.
+v0.4 implementation is now present on the local `master` branch as the literature discovery and import pipeline. It includes:
+
+1. Research Topic container, Document Candidate protocol, and three-lane UI skeleton.
+2. OpenAlex, Crossref, Unpaywall, and HTTP connector source adapters with fixture-backed tests.
+3. Candidate review, anomaly blocking, dedupe hints, and import plan generation.
+4. Zotero Write Queue, Zotero item/attachment writer adapters, top toolbar entry, context-menu entry, and Ethereal Reference reservation points.
+
+Manual Zotero runtime QA is still required for toolbar DOM placement and native Zotero item/attachment writes.
 
 Recommended v0.3 implementation order:
 

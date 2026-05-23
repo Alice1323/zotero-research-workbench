@@ -8,9 +8,10 @@
 
 验收前先明确数据边界：
 
-- 会写 Zotero 原生笔记：只有点击 `确认并写入 Zotero 笔记`。该动作会在当前选中的 Zotero 条目下创建一条 child note。
+- 会写 Zotero 原生笔记：点击 `确认并写入 Zotero 笔记`。该动作会在当前选中的 Zotero 条目下创建 child note，或为多篇共同点笔记创建 standalone note。
+- 会写 Zotero 原生条目/附件：v0.4 文献发现流水线中，只有用户显式创建导入计划并运行 `Zotero 写入队列` 后，才会串行创建 Zotero 条目和附件。
 - 只读 Zotero：选中文献信息、PDF 附件检测、阅读器选中文本读取、引用关系图谱检查、作品身份线索检查、重复作品候选检查。
-- 只写 Workbench Local Store：研究笔记草稿、任务记录、图谱种子、图谱种子复核状态、生成的本地引用关系、提示词模板覆盖、导入的工作台快照。
+- 只写 Workbench Local Store：研究主题、发现计划、候选文献、导入计划、写入队列记录、研究笔记草稿、任务记录、图谱种子、图谱种子复核状态、生成的本地引用关系、提示词模板覆盖、导入的工作台快照。
 - 写 Zotero preferences，但不写 Zotero 条目：LLM Provider 设置、WebDAV 设置、Workbench Local Store 快照。
 - 写本地文件或远端文件：`导出工作台状态` 写本地 JSON；`导出 ZIP` 写本地 ZIP；`上传 JSON 到 WebDAV` 写远端脱敏 JSON。
 
@@ -114,7 +115,7 @@
 - 面板显示 `已确认并写入 Zotero 笔记`。
 - 当前 Zotero 文献下新增一条原生 child note。
 - Workbench Local Store 中对应 draft 被标记为 confirmed，并记录 Zotero note key。
-- 这是本手册中唯一预期会写 Zotero 原生笔记的动作。
+- 这是本手册中预期会写 Zotero 原生笔记的确认动作。
 - 该动作不应修改 Zotero 条目字段、标签、附件或 Zotero-native relations。
 
 ## 7. 捕获并复核图谱种子
@@ -141,7 +142,34 @@
 - 确认图谱种子不等于写入 Zotero 关系，也不修改 Zotero 条目元数据。
 - 失败时展开 `技术细节`，确认敏感信息已脱敏。
 
-## 8. 生成引用关系
+## 8. v0.4 文献发现与导入流水线
+
+1. 点击 Zotero toolbar `研究工作台` 按钮；如果 toolbar 按钮没有出现，从 Tools menu 点击 `打开研究工作台`。
+2. 确认 Research Panel 打开，并显示 `研究主题`、`三段式流水线`、`启动`、`复核`、`写入`。
+3. 输入研究主题标题、描述和文献发现请求。
+4. 选择 OpenAlex、Crossref、Unpaywall；HTTP Connector 仅在已配置合法 endpoint 时选择。
+5. 点击 `生成发现计划`。
+6. 确认计划预览写明来源、最多候选数量，并说明 `不会自动写入 Zotero`。
+7. 点击 `确认并搜索`。
+8. 确认候选文献出现，且每条显示来源与异常标签。
+9. 选择一个无异常候选，点击 `批量加入写入计划`。
+10. 确认 `Zotero 写入队列` 显示待写入条目和附件数量。
+11. 点击队列中的 `运行写入队列`。
+12. 回到 Zotero 主窗口，确认创建了预期 Zotero 条目；如候选含可导入 PDF 附件，确认附件被创建在对应条目下。
+13. 右键 Zotero item，选择 `从选中文献发现相关文献`；确认打开的是 draft discovery plan flow，而不是立即搜索或写入。
+
+验收点：
+
+- 发现计划确认前，不应调用 OpenAlex、Crossref、Unpaywall 或 HTTP connector。
+- 搜索结果只写 Workbench Local Store 的 `documentCandidates` 和任务记录，不写 Zotero 原生条目或附件。
+- 异常候选不能被快速加入写入计划，必须单独复核。
+- 写入计划创建后仍不写 Zotero，只有运行 `Zotero 写入队列` 才写 Zotero。
+- Zotero 写入队列一次只运行一个 item 或 attachment 写入。
+- 附件写入失败时，已创建的条目应保留，失败 entry 应在本地队列结果中可见。
+- 不应出现 Sci-Hub、盗版源、Google Scholar scraping 或本地命令 connector 执行入口。
+- Ethereal Reference 占位区可见，但不应渲染关系网络图或 force-directed layout。
+
+## 9. 生成引用关系
 
 1. 在 `图谱种子复核队列` 中筛选 `已确认`。
 2. 找到已确认且未生成关系的种子。
@@ -155,7 +183,7 @@
 - 该动作写 Workbench Local Store 的 `citationRelations`，并记录 `promote-graph-seed-to-citation-relation` 任务。
 - 该动作不写 Zotero-native relations，不改 Zotero 条目字段、标签或笔记。
 
-## 9. 引用关系质量筛选
+## 10. 引用关系质量筛选
 
 1. 在 `引用关系图谱` 中点击 `刷新关系图谱`。
 2. 切换 `关系范围`：当前作品、全部关系。
@@ -172,7 +200,7 @@
 - 行内显示来源作品、目标线索、关系类型、置信度、证据、来源图谱种子 id、质量标签。
 - 质量筛选只是本地检视辅助，不写 Zotero，也不修改 Workbench Local Store 中的关系内容。
 
-## 10. 作品身份线索状态筛选
+## 11. 作品身份线索状态筛选
 
 1. 在 `作品身份线索` 点击 `刷新身份线索`。
 2. 切换 `身份范围`：当前作品、全部线索。
@@ -189,7 +217,7 @@
 - 状态标签来自本地 drafts、graph seeds、citation relations 的聚合结果。
 - 该视图只读 Workbench Local Store；不会合并作品、查询外部服务、创建 Zotero 条目或写 Zotero 元数据。
 
-## 11. 重复作品候选
+## 12. 重复作品候选
 
 1. 在 `重复作品候选` 点击 `刷新重复候选`。
 2. 切换 `候选范围`：全部关系、当前作品。
@@ -208,7 +236,7 @@
 - 证据只显示产生重复信号的草稿、图谱种子或引用关系。
 - 该功能不合并作品、不改 Zotero 条目、不重写 work id、不删除记录、不调用外部身份服务。
 
-## 12. 导出和导入 JSON
+## 13. 导出和导入 JSON
 
 1. 点击 `导出工作台状态`。
 2. 选择保存位置，保存 JSON。
@@ -219,12 +247,12 @@
 验收点：
 
 - JSON package 类型为工作台导出快照。
-- 导出内容包含 Workbench Local Store 快照：drafts、graphSeeds、citationRelations、taskLedger、prompt templates/overrides、provider 设置结构和 provenance。
+- 导出内容包含 Workbench Local Store 快照：researchTopics、documentCandidates、literatureDiscoveryJobs、zoteroImportPlans、zoteroWriteQueues、drafts、graphSeeds、citationRelations、taskLedger、prompt templates/overrides、provider 设置结构和 provenance。
 - API 密钥、WebDAV 密码、bearer token、authorization header、secret 字段应显示为 `<redacted>`，不能明文出现。
 - 导入只恢复 Workbench Local Store 快照到 Zotero preferences；不创建 Zotero 笔记、条目、标签或附件。
 - 无效 JSON 或不支持的 package 会显示中文错误，并可展开 `技术细节`。
 
-## 13. 导出和导入 ZIP
+## 14. 导出和导入 ZIP
 
 1. 点击 `导出 ZIP`。
 2. 保存 `.zip` 文件。
@@ -240,7 +268,7 @@
 - ZIP 不包含 PDF、附件、Zotero 条目全量元数据、日志、凭据、加密秘密或 WebDAV 同步物料。
 - ZIP 导入只恢复 Workbench Local Store 快照；不写 Zotero 原生笔记或条目元数据。
 
-## 14. WebDAV 上传
+## 15. WebDAV 上传
 
 1. 在 `WebDAV 导出目标` 填写：
    - `服务器地址`
@@ -262,12 +290,13 @@
 - 插件会尝试用 WebDAV `MKCOL` 创建缺失的远端目录父级；账户无权限时应给出中文错误。
 - WebDAV 功能是手动上传，不自动同步、不从 WebDAV 导入、不处理冲突。
 
-## 15. 常见失败与技术细节复核
+## 16. 常见失败与技术细节复核
 
 遇到失败时，先看中文状态，再展开对应区域的 `技术细节`：
 
 - 文献总结/翻译失败：展开 `研究面板` 中生成结果附近的 `技术细节`。
 - 图谱种子捕获失败：展开 `图谱种子` 附近的 `技术细节`。
+- 文献发现、候选复核、写入队列失败：查看 `候选文献` / `Zotero 写入队列` 附近状态文本，并复核 Workbench Local Store 记录。
 - 导入/导出/复核/生成关系失败：展开 `全局入口` 下的 `技术细节`。
 - 提示词模板失败：展开 `提示词模板` 下的 `技术细节`。
 - WebDAV 失败：展开 `WebDAV 导出目标` 下的 `技术细节`。
@@ -279,9 +308,10 @@
 - 技术细节不得泄露 API 密钥、WebDAV 密码、bearer token、authorization header 或 secret 字段。
 - 常见 Provider 失败包括：未配置、API 密钥无效、模型不可用、接口地址不可用、请求超时、模型名称未被接口校验。
 - 常见导入失败包括：无效 JSON、不支持的工作台导出文件、不支持的 ZIP 包、ZIP 缺少 `snapshot.json`。
+- 常见 v0.4 失败包括：未生成发现计划、未选择可执行来源、Unpaywall 缺少 DOI、HTTP connector endpoint 缺失或返回非 JSON、异常候选未复核、附件类型不支持、Zotero 附件写入失败。
 - 常见 WebDAV 失败包括：URL 非 http(s)、缺少用户名或密码、认证失败、目录检查失败、目录创建失败、上传失败。
 
-## 16. 最小验收记录模板
+## 17. 最小验收记录模板
 
 人工验收完成后可记录：
 
@@ -299,6 +329,7 @@ Provider 保存与测试连接：通过/失败
 翻译阅读上下文：通过/失败
 确认写入 Zotero 笔记：通过/失败
 图谱种子捕获与复核：通过/失败
+v0.4 文献发现与导入流水线：通过/失败
 生成引用关系：通过/失败
 引用关系质量筛选：通过/失败
 作品身份线索状态筛选：通过/失败
@@ -308,7 +339,8 @@ ZIP 导出/导入：通过/失败
 WebDAV 上传：通过/失败/未测
 技术细节脱敏：通过/失败
 
-确认唯一 Zotero 原生笔记写入动作：
+确认 Zotero 原生笔记写入只来自用户确认：
+确认 Zotero 条目/附件写入只来自用户运行写入队列：
 确认其他功能只读或只写 Workbench Local Store：
 问题与截图：
 ```
