@@ -7,6 +7,7 @@ const {
   confirmResearchNoteDraftSavedToZoteroTransaction,
   createAiJobPlanTransaction,
   createZoteroImportPlanTransaction,
+  createZoteroWriteQueueTransaction,
   createResearchNoteDraftTransaction,
   markDocumentCandidateReviewedTransaction,
   markRunningAiJobsForManualResumeTransaction,
@@ -14,6 +15,7 @@ const {
   promoteGraphSeedTransaction,
   recordAiTaskQueueResultTransaction,
   recordAiTaskQueueResultWithDraftsTransaction,
+  recordZoteroWriteQueueResultTransaction,
   replaceWorkbenchSnapshotFromImportTransaction,
   reviewGraphSeedTransaction,
   upsertPromptOverrideTransaction
@@ -396,4 +398,61 @@ test("createZoteroImportPlanTransaction stores plan and links it to the topic", 
   assert.equal(result.snapshot.zoteroImportPlans[0].id, "zotero-import-plan-a");
   assert.deepEqual(result.snapshot.researchTopics[0].linkedImportPlanIds, ["zotero-import-plan-a"]);
   assert.equal(result.snapshot.taskLedger.at(-1).workflowStep, "create-zotero-import-plan");
+});
+
+test("createZoteroWriteQueueTransaction stores queue and links it to the topic", () => {
+  const result = createZoteroWriteQueueTransaction({
+    snapshot: {
+      schemaVersion: 1,
+      exportedAt: "old",
+      researchTopics: [{ id: "topic-a", title: "Topic", linkedWriteQueueIds: [] }],
+      zoteroWriteQueues: [],
+      taskLedger: []
+    },
+    queue: {
+      id: "zotero-write-queue-plan-a",
+      importPlanId: "plan-a",
+      topicId: "topic-a",
+      entries: [{ id: "item-a", state: "queued" }]
+    },
+    createdAt: "2026-05-23T12:06:00.000Z"
+  });
+
+  assert.equal(result.status, "zotero-write-queue-created");
+  assert.equal(result.snapshot.zoteroWriteQueues[0].id, "zotero-write-queue-plan-a");
+  assert.deepEqual(result.snapshot.researchTopics[0].linkedWriteQueueIds, ["zotero-write-queue-plan-a"]);
+  assert.equal(result.snapshot.taskLedger.at(-1).workflowStep, "create-zotero-write-queue");
+});
+
+test("recordZoteroWriteQueueResultTransaction stores queue progress and write results", () => {
+  const result = recordZoteroWriteQueueResultTransaction({
+    snapshot: {
+      schemaVersion: 1,
+      exportedAt: "old",
+      researchTopics: [{ id: "topic-a", title: "Topic", linkedWriteQueueIds: ["queue-a"] }],
+      zoteroWriteQueues: [{ id: "queue-a", state: "running", entries: [] }],
+      zoteroWriteResults: [],
+      taskLedger: []
+    },
+    queue: {
+      id: "queue-a",
+      importPlanId: "plan-a",
+      topicId: "topic-a",
+      state: "completed",
+      entries: [{ id: "item-a", state: "succeeded" }]
+    },
+    result: {
+      id: "write-result-item-a",
+      queueId: "queue-a",
+      entryId: "item-a",
+      state: "succeeded",
+      zoteroItemKey: "ITEMKEY"
+    },
+    recordedAt: "2026-05-23T12:07:00.000Z"
+  });
+
+  assert.equal(result.status, "zotero-write-queue-result-recorded");
+  assert.equal(result.snapshot.zoteroWriteQueues[0].state, "completed");
+  assert.equal(result.snapshot.zoteroWriteResults[0].zoteroItemKey, "ITEMKEY");
+  assert.equal(result.snapshot.taskLedger.at(-1).workflowStep, "record-zotero-write-queue-result");
 });

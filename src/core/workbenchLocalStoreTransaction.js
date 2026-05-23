@@ -515,6 +515,81 @@ function createZoteroImportPlanTransaction({ snapshot, importPlan, createdAt } =
   return { status: "zotero-import-plan-created", importPlanId: plan.id, snapshot: next };
 }
 
+function createZoteroWriteQueueTransaction({ snapshot, queue, createdAt } = {}) {
+  const timestamp = cleanText(createdAt) || cleanText(queue?.createdAt) || new Date().toISOString();
+  const normalizedQueue = clonePlain(queue);
+  if (!cleanText(normalizedQueue.id)) {
+    throw new Error("Zotero 写入队列 id 不能为空");
+  }
+  const next = normalizeTransactionSnapshot(snapshot);
+  upsertRecordById(next.zoteroWriteQueues, normalizedQueue);
+  linkTopicInPlace(next, {
+    topicId: cleanText(normalizedQueue.topicId),
+    writeQueueIds: [normalizedQueue.id],
+    updatedAt: timestamp
+  });
+  next.taskLedger.push({
+    id: `task-${normalizedQueue.id}-create-zotero-write-queue`,
+    workflowStep: "create-zotero-write-queue",
+    state: "completed",
+    providerId: null,
+    promptTaskTemplateId: null,
+    outputLocation: {
+      queueId: normalizedQueue.id,
+      importPlanId: cleanText(normalizedQueue.importPlanId),
+      topicId: cleanText(normalizedQueue.topicId)
+    },
+    errorNotice: null,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    provenance: { source: "explicit-user-action", writeTarget: "local-snapshot-only" }
+  });
+  next.exportedAt = timestamp;
+  return { status: "zotero-write-queue-created", queueId: normalizedQueue.id, snapshot: next };
+}
+
+function recordZoteroWriteQueueResultTransaction({ snapshot, queue, result, results, recordedAt } = {}) {
+  const timestamp = cleanText(recordedAt) || new Date().toISOString();
+  const normalizedQueue = clonePlain(queue);
+  if (!cleanText(normalizedQueue.id)) {
+    throw new Error("Zotero 写入队列 id 不能为空");
+  }
+  const writeResults = cloneArray(results).concat(result && typeof result === "object" ? [clonePlain(result)] : []);
+  const next = normalizeTransactionSnapshot(snapshot);
+  upsertRecordById(next.zoteroWriteQueues, normalizedQueue);
+  for (const writeResult of writeResults) {
+    upsertRecordById(next.zoteroWriteResults, {
+      ...writeResult,
+      queueId: cleanText(writeResult.queueId) || normalizedQueue.id,
+      recordedAt: cleanText(writeResult.recordedAt) || timestamp
+    });
+  }
+  linkTopicInPlace(next, {
+    topicId: cleanText(normalizedQueue.topicId),
+    writeQueueIds: [normalizedQueue.id],
+    updatedAt: timestamp
+  });
+  next.taskLedger.push({
+    id: `task-${normalizedQueue.id}-record-zotero-write-queue-result-${createStableTimestamp(timestamp)}`,
+    workflowStep: "record-zotero-write-queue-result",
+    state: "completed",
+    providerId: null,
+    promptTaskTemplateId: null,
+    outputLocation: {
+      queueId: normalizedQueue.id,
+      importPlanId: cleanText(normalizedQueue.importPlanId),
+      topicId: cleanText(normalizedQueue.topicId),
+      resultCount: writeResults.length
+    },
+    errorNotice: null,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    provenance: { source: "zotero-write-queue", writeTarget: "local-snapshot-only" }
+  });
+  next.exportedAt = timestamp;
+  return { status: "zotero-write-queue-result-recorded", queueId: normalizedQueue.id, snapshot: next };
+}
+
 function recordAiTaskQueueResultWithDraftsTransaction({ snapshot, queueResult, recordedAt } = {}) {
   const timestamp = cleanText(recordedAt) || new Date().toISOString();
   const recorded = recordAiTaskQueueResultTransaction({ snapshot, queueResult, recordedAt: timestamp });
@@ -672,6 +747,8 @@ function normalizeTransactionSnapshot(snapshot) {
     literatureDiscoveryJobs: Array.isArray(input.literatureDiscoveryJobs) ? input.literatureDiscoveryJobs : [],
     literatureDiscoveryFailures: Array.isArray(input.literatureDiscoveryFailures) ? input.literatureDiscoveryFailures : [],
     zoteroImportPlans: Array.isArray(input.zoteroImportPlans) ? input.zoteroImportPlans : [],
+    zoteroWriteQueues: Array.isArray(input.zoteroWriteQueues) ? input.zoteroWriteQueues : [],
+    zoteroWriteResults: Array.isArray(input.zoteroWriteResults) ? input.zoteroWriteResults : [],
     aiJobs: Array.isArray(input.aiJobs) ? input.aiJobs : [],
     aiTasks: Array.isArray(input.aiTasks) ? input.aiTasks : [],
     aiTaskResults: Array.isArray(input.aiTaskResults) ? input.aiTaskResults : [],
@@ -691,6 +768,7 @@ function linkTopicInPlace(snapshot, links) {
     candidateIds: links.candidateIds,
     aiJobIds: links.aiJobIds,
     importPlanIds: links.importPlanIds,
+    writeQueueIds: links.writeQueueIds,
     updatedAt: links.updatedAt
   });
   snapshot.researchTopics = result.snapshot.researchTopics;
@@ -783,6 +861,7 @@ const WorkbenchLocalStoreTransaction = {
   createLiteratureDiscoveryPlanTransaction,
   createResearchNoteDraftTransaction,
   createZoteroImportPlanTransaction,
+  createZoteroWriteQueueTransaction,
   markDocumentCandidateReviewedTransaction,
   markRunningAiJobsForManualResumeTransaction,
   removePromptOverrideTransaction,
@@ -790,6 +869,7 @@ const WorkbenchLocalStoreTransaction = {
   recordAiTaskQueueResultTransaction,
   recordAiTaskQueueResultWithDraftsTransaction,
   recordLiteratureDiscoveryCandidatesTransaction,
+  recordZoteroWriteQueueResultTransaction,
   replaceWorkbenchSnapshotFromImportTransaction,
   reviewGraphSeedTransaction,
   upsertPromptOverrideTransaction

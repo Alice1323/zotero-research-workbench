@@ -14,6 +14,8 @@ const WorkbenchDocumentCandidateProtocol = require("./documentCandidateProtocol"
 const WorkbenchDocumentCandidateReview = require("./documentCandidateReview");
 const WorkbenchLiteratureDiscovery = require("./literatureDiscovery");
 const WorkbenchLiteratureSourceAdapters = require("./literatureSourceAdapters");
+const WorkbenchZoteroWriteQueue = require("./zoteroWriteQueue");
+const WorkbenchZoteroItemWriter = require("./zoteroItemWriter");
 const WorkbenchProviderRequestPolicy = require("./providerRequestPolicy");
 const WorkbenchAiTaskWorkspace = require("./aiTaskWorkspace");
 
@@ -563,6 +565,8 @@ module.exports = {
   WorkbenchDocumentCandidateReview,
   WorkbenchLiteratureDiscovery,
   WorkbenchLiteratureSourceAdapters,
+  WorkbenchZoteroWriteQueue,
+  WorkbenchZoteroItemWriter,
   WorkbenchLocalStore,
   buildWebDavDirectoryRequests,
   buildWebDavExportRequest,

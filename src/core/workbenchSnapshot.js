@@ -116,6 +116,8 @@ function normalizeSnapshotForImport(snapshot) {
     literatureDiscoveryJobs: Array.isArray(snapshot.literatureDiscoveryJobs) ? snapshot.literatureDiscoveryJobs : [],
     literatureDiscoveryFailures: Array.isArray(snapshot.literatureDiscoveryFailures) ? snapshot.literatureDiscoveryFailures : [],
     zoteroImportPlans: Array.isArray(snapshot.zoteroImportPlans) ? snapshot.zoteroImportPlans : [],
+    zoteroWriteQueues: Array.isArray(snapshot.zoteroWriteQueues) ? snapshot.zoteroWriteQueues : [],
+    zoteroWriteResults: Array.isArray(snapshot.zoteroWriteResults) ? snapshot.zoteroWriteResults : [],
     aiJobs: Array.isArray(snapshot.aiJobs) ? snapshot.aiJobs : [],
     aiTasks: Array.isArray(snapshot.aiTasks) ? snapshot.aiTasks : [],
     aiTaskResults: Array.isArray(snapshot.aiTaskResults) ? snapshot.aiTaskResults : [],
