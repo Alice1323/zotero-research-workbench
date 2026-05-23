@@ -1120,6 +1120,62 @@
     renderCitationGraphInspector(records.graphReview);
   }
 
+  function createLiteratureDiscoveryPlan() {
+    const preview = getField("literature-discovery-plan-preview");
+    if (!preview) {
+      return;
+    }
+    clearElement(preview);
+    appendRecordItem(preview, {
+      title: "发现计划",
+      meta: "待确认",
+      detail: "发现计划将在确认后查询来源；不会自动写入 Zotero。"
+    });
+    getField("literature-discovery-confirm-search")?.removeAttribute("disabled");
+  }
+
+  function renderDocumentCandidateReview(readModel) {
+    const list = getField("document-candidate-list");
+    if (!list) {
+      return;
+    }
+    clearElement(list);
+    const candidates = Array.isArray(readModel?.candidates) ? readModel.candidates : [];
+    const status = getField("document-candidate-review-status");
+    if (status) {
+      const blockedCount = Number(readModel?.summary?.blockedCount || 0);
+      status.textContent = candidates.length
+        ? `候选 ${candidates.length}｜异常 ${blockedCount}`
+        : "异常候选需单独复核";
+    }
+    if (!candidates.length) {
+      appendEmptyRecord(list, "暂无候选文献");
+      return;
+    }
+    for (const candidate of candidates) {
+      appendRecordItem(list, {
+        title: candidate.title || "未命名候选文献",
+        detail: `来源：${candidate.sourceAdapterId || "未记录"}｜异常：${(candidate.anomalyTags || []).join("、") || "无"}`
+      });
+    }
+  }
+
+  function renderZoteroWriteQueue(readModel) {
+    const list = getField("zotero-write-queue-list");
+    if (!list) {
+      return;
+    }
+    clearElement(list);
+    const entries = Array.isArray(readModel?.entries) ? readModel.entries : [];
+    if (!entries.length) {
+      appendEmptyRecord(list, "暂无写入任务");
+      return;
+    }
+    for (const entry of entries) {
+      appendRecordItem(list, { title: entry.title || entry.id, detail: entry.stateLabel || entry.state });
+    }
+  }
+
   function createCurrentGraphReviewReadModel(snapshot = loadWorkbenchSnapshot()) {
     return createGraphReviewReadModel({
       snapshot,
@@ -1521,6 +1577,20 @@
     item.appendChild(metaNode);
     item.appendChild(detailNode);
     return item;
+  }
+
+  function appendRecordItem(list, { title, meta, detail }) {
+    list.appendChild(createRecordItem({
+      title: title || "",
+      meta: meta || "",
+      detail: detail || ""
+    }));
+  }
+
+  function clearElement(element) {
+    if (element) {
+      element.textContent = "";
+    }
   }
 
   function createDuplicateWorkCandidateEvidenceDetails(snapshot, candidate) {
@@ -2839,6 +2909,7 @@
     getField("refresh-duplicate-work-candidates").addEventListener("click", renderDuplicateWorkCandidates);
     getField("refresh-citation-graph-inspector").addEventListener("click", renderCitationGraphInspector);
     getField("refresh-graph-seed-review").addEventListener("click", renderGraphSeedReviewQueue);
+    getField("literature-discovery-create-plan").addEventListener("click", createLiteratureDiscoveryPlan);
     getField("prompt-template-selector").addEventListener("change", loadPromptTemplateEditor);
     getField("prompt-template-save").addEventListener("click", savePromptTemplateOverride);
     getField("prompt-template-reset").addEventListener("click", resetPromptTemplateOverride);

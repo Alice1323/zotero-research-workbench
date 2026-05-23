@@ -61,6 +61,25 @@ test("research panel exposes Chinese LLM provider settings", () => {
     "任务生成结果",
     "失败诊断",
     "可继续任务",
+    "研究主题",
+    "三段式流水线",
+    "启动",
+    "复核",
+    "写入",
+    "文献发现",
+    "候选文献",
+    "来源选择",
+    "OpenAlex",
+    "Crossref",
+    "Unpaywall",
+    "HTTP Connector",
+    "生成发现计划",
+    "确认并搜索",
+    "批量加入写入计划",
+    "异常候选需单独复核",
+    "Zotero 写入队列",
+    "Ethereal Reference",
+    "关系网络将在 v0.5 启用",
     "成功",
     "跳过",
     "失败",
@@ -183,6 +202,23 @@ test("research panel exposes Chinese LLM provider settings", () => {
   assert.match(panel, /id="ai-task-results-summary"/);
   assert.match(panel, /id="ai-job-diagnosis"/);
   assert.match(panel, /id="ai-job-resume-list"/);
+  for (const id of [
+    "research-topic-title",
+    "research-topic-description",
+    "pipeline-lane-launch",
+    "pipeline-lane-review",
+    "pipeline-lane-write",
+    "literature-discovery-request",
+    "literature-discovery-create-plan",
+    "literature-discovery-confirm-search",
+    "document-candidate-list",
+    "document-candidate-review-status",
+    "zotero-import-plan-create",
+    "zotero-write-queue-list",
+    "ethereal-reference-placeholder"
+  ]) {
+    assert.match(panel, new RegExp(`id="${id}"`));
+  }
   assert.match(panel, /id="save-paper-summary-note"/);
   assert.match(panel, /class="primary-action"/);
   assert.match(panel, /id="refresh-reading-context"/);
@@ -339,6 +375,15 @@ test("research panel loads v0.4 literature discovery runtime modules", () => {
   assert.ok(panel.indexOf("zoteroWriteQueue.js") < panel.indexOf("researchPanelOrchestrator.js"));
   assert.ok(panel.indexOf("zoteroItemWriter.js") < panel.indexOf("paperSummary.js"));
   assert.ok(panel.indexOf("etherealReferenceGraph.js") < panel.indexOf("researchPanelOrchestrator.js"));
+});
+
+test("research panel runtime wires v0.4 pipeline skeleton actions", () => {
+  const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
+
+  assert.match(runtime, /function createLiteratureDiscoveryPlan/);
+  assert.match(runtime, /function renderDocumentCandidateReview/);
+  assert.match(runtime, /function renderZoteroWriteQueue/);
+  assert.match(runtime, /literature-discovery-create-plan"\)\.addEventListener\("click", createLiteratureDiscoveryPlan\)/);
 });
 
 test("research panel runtime wires provider request guards", () => {
