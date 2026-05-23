@@ -10,7 +10,15 @@ This index is the entry point for project documentation. Use it to find the curr
 
 ## Current Version Direction
 
+- [v0.4 Literature Discovery And Import Pipeline Design](./superpowers/specs/2026-05-23-v04-literature-discovery-import-pipeline-design.md): main v0.4 design covering topic-centered workflow linkage, OpenAlex/Crossref/Unpaywall and HTTP connector adapters, Document Candidates, batch review with anomaly blocking, confirmed Zotero item plus attachment import, top toolbar and context-menu launch surfaces, and Ethereal Reference v0.5 reservation.
 - [v0.3 AI Task Workspace Design](./superpowers/specs/2026-05-21-v03-ai-task-workspace-design.md): main v0.3 design covering AI Job/Task model, humanized UI requirements, queue concurrency, confirmation gates, literature discovery scope, external connector boundary, import modes, retries/skips/diagnosis, resumability, and the right-click menu extension point.
+
+Recommended v0.4 implementation order:
+
+1. Slice 1: Research Topic container, Document Candidate protocol, and three-lane UI skeleton.
+2. Slice 2: OpenAlex, Crossref, Unpaywall, and HTTP connector source adapters with fixture-backed tests.
+3. Slice 3: candidate review, anomaly blocking, dedupe hints, and import plan generation.
+4. Slice 4: Zotero Write Queue, Zotero item/attachment writer adapters, top toolbar entry, context-menu entry, and Ethereal Reference reservation points.
 
 Recommended v0.3 implementation order:
 
@@ -31,6 +39,10 @@ ADRs record decisions that are hard to reverse or easy to misunderstand later.
 ## Design Specs
 
 Design specs describe intended behavior and boundaries before implementation.
+
+### v0.4
+
+- [v0.4 Literature Discovery And Import Pipeline Design](./superpowers/specs/2026-05-23-v04-literature-discovery-import-pipeline-design.md)
 
 ### v0.3
 
