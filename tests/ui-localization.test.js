@@ -37,6 +37,8 @@ test("Zotero tools menu uses Chinese label", () => {
   const plugin = fs.readFileSync(path.join(root, "chrome/content/workbenchPlugin.mjs"), "utf8");
 
   assert.match(plugin, /打开研究工作台/);
+  assert.match(plugin, /研究工作台/);
+  assert.match(plugin, /从选中文献发现相关文献/);
   assert.doesNotMatch(plugin, /Open Research Workbench/);
 });
 
