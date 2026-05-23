@@ -331,7 +331,7 @@
           </div>
           <label>
             任务需求
-            <textarea id="ai-job-request" rows="4" placeholder="例如：请总结当前选中的文献，并保留失败或跳过原因"></textarea>
+            <textarea id="ai-job-request" rows="4" placeholder="例如：请找出当前选中文献的共同点，并生成一篇独立研究笔记"></textarea>
           </label>
           <div class="field-grid compact-fields">
             <label>
@@ -355,6 +355,13 @@
           </div>
           <div id="ai-task-queue-list" class="record-list">
             <div class="record-item">暂无任务队列</div>
+          </div>
+          <div class="section-header">
+            <strong>任务生成结果</strong>
+            <span id="ai-task-results-summary" class="status">结果 0</span>
+          </div>
+          <div id="ai-task-results-list" class="record-list" aria-live="polite">
+            <div class="record-item">暂无任务生成结果</div>
           </div>
           <div id="ai-job-diagnosis" class="record-list" hidden="hidden">
             <div class="record-item">失败诊断：暂无</div>

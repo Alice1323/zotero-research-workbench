@@ -67,6 +67,64 @@ test("selected paper runtime reads the first regular Zotero item and normalizes 
   });
 });
 
+test("selected paper runtime reads all selected regular Zotero items in selection order", () => {
+  const first = createItem({
+    key: "ITEM1",
+    fields: {
+      title: "First Paper",
+      abstractNote: "First abstract",
+      DOI: "10.1000/first",
+      publicationTitle: "Journal A",
+      date: "2024"
+    },
+    creators: [{ firstName: "Ada", lastName: "Lovelace" }]
+  });
+  const second = createItem({
+    key: "ITEM2",
+    fields: {
+      title: "Second Paper",
+      abstractNote: "Second abstract",
+      DOI: "10.1000/second",
+      publicationTitle: "Journal B",
+      date: "2025"
+    },
+    creators: [{ firstName: "Grace", lastName: "Hopper" }]
+  });
+  const note = { isNote: () => true, isAttachment: () => false };
+  const attachment = { isNote: () => false, isAttachment: () => true };
+  const runtime = createWorkbenchSelectedPaperRuntime({
+    getZotero: () => ({
+      getMainWindow: () => ({ ZoteroPane: { getSelectedItems: () => [note, first, attachment, second] } })
+    })
+  });
+
+  assert.deepEqual(
+    runtime.readSelectedPaperContexts().map((paper) => ({
+      key: paper.key,
+      title: paper.title,
+      authors: paper.authors,
+      year: paper.year,
+      doi: paper.doi
+    })),
+    [
+      {
+        key: "ITEM1",
+        title: "First Paper",
+        authors: "Ada Lovelace",
+        year: "2024",
+        doi: "10.1000/first"
+      },
+      {
+        key: "ITEM2",
+        title: "Second Paper",
+        authors: "Grace Hopper",
+        year: "2025",
+        doi: "10.1000/second"
+      }
+    ]
+  );
+});
+
 test("selected paper runtime detects the best PDF child attachment", () => {
   const item = createItem({ key: "ABC123", fields: { title: "A Paper" }, attachments: [1, 2] });
   const runtime = createWorkbenchSelectedPaperRuntime({
@@ -113,4 +171,5 @@ test("selected paper runtime exposes the same interface to browser runtime scrip
 
   assert.equal(typeof context.window.WorkbenchSelectedPaperRuntime.createWorkbenchSelectedPaperRuntime, "function");
   assert.equal(typeof context.window.WorkbenchSelectedPaperRuntime.createBrowserSelectedPaperRuntime, "function");
+  assert.equal(typeof context.window.WorkbenchSelectedPaperRuntime.createWorkbenchSelectedPaperRuntime().readSelectedPaperContexts, "function");
 });

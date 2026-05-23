@@ -1,6 +1,6 @@
 # Zotero 研究工作台
 
-Zotero Research Workbench is a Zotero 8/9-only plugin for a single-paper reading workflow.
+Zotero Research Workbench is a Zotero 8/9-only plugin for multi-paper synthesis and research-note workflows.
 
 The first release is deliberately narrow:
 
@@ -23,14 +23,16 @@ The first implementation slice contains:
 - natural-language task request entry in the Research Panel;
 - AI Job Plan preview with explicit confirmation before provider calls;
 - visible AI Task Queue with provider concurrency limit;
-- retry twice, visible Task Skip, Job Failure Diagnosis, pause/resume/cancel controls;
+- task-type recognition that decides whether a multi-paper request should become per-paper summary tasks or one commonality synthesis note;
+- multi-paper commonality jobs that turn the current Zotero selection into one standalone `共同点笔记` draft when the request is recognized as synthesis rather than per-paper handling;
+- retry twice, visible Task Skip, Job Failure Diagnosis, and pause/resume/cancel controls that keep paused work resumable;
 - manual resume display for interrupted jobs without automatic background continuation;
 - Zotero plugin metadata and startup hooks;
 - a Chinese Research Panel that reads the currently selected Zotero item;
 - a Chinese LLM Provider settings section that saves to Zotero preferences;
 - a `刷新阅读上下文` action that displays selected text from the active Zotero Reader when available;
 - a `总结选中文献` action that sends selected item metadata to an OpenAI-compatible chat endpoint and displays a Chinese reading summary;
-- a `确认并写入 Zotero 笔记` action that explicitly saves the current draft as a child note on the selected Zotero item;
+- a `确认并写入 Zotero 笔记` action that explicitly saves the current draft as a Zotero note; single-paper drafts are child notes, while multi-paper commonality drafts are standalone notes;
 - provider configuration redaction;
 - in-memory Workbench Local Store;
 - prompt task template rendering with a safe variable whitelist;
@@ -53,7 +55,7 @@ npm run check
 npm run package
 ```
 
-The package command writes `dist/zotero-research-workbench-0.3.0-beta.1.xpi`.
+The package command writes `dist/zotero-research-workbench-0.3.0.xpi`.
 
 ## First Release QA
 
@@ -120,9 +122,21 @@ When the selected Zotero item has an existing PDF child attachment, the panel sh
 
 `刷新阅读上下文` reads the active Zotero Reader or window selection and displays the selected text in the panel. If no reader text is selected, the panel shows `暂无阅读器选中文本`. This is a read-only path and does not write Zotero notes, tags, attachments, or item fields.
 
-Generated summaries are saved first as local Research Note Drafts with provenance. They do not write notes, tags, attachments, or item fields back to Zotero automatically.
+Generated summaries, translations, and AI Task Workspace commonality notes are saved first as local Research Note Drafts with provenance. Per-paper AI Task Workspace summary results are listed in the task result view. They do not write notes, tags, attachments, or item fields back to Zotero automatically.
 
-`确认并写入 Zotero 笔记` is the explicit save-to-Zotero-note action. It creates a new child note under the currently selected Zotero item, records the Zotero note key in the local draft snapshot, and marks the draft as confirmed.
+`确认并写入 Zotero 笔记` is the explicit save-to-Zotero-note action. It creates a new child note under the currently selected Zotero item for single-paper drafts. For `共同点笔记` drafts generated from multiple selected papers, it creates a standalone Zotero note so the synthesis is not incorrectly attached to one source paper. The action records the Zotero note key in the local draft snapshot and marks the draft as confirmed.
+
+## AI Task Classification Behavior
+
+The AI Task Workspace does not treat every multi-selection as the same task. `生成任务计划` first classifies the natural-language request. Explicit wording such as `分别`, `逐篇`, `每篇`, or `一篇一篇` creates one `single-paper-summary` task per selected paper. Explicit wording such as `共同点`, `共通点`, `比较`, `对比`, `综合`, `关系`, or `归纳` creates one `multi-paper-commonality-note` task for the whole selection.
+
+When a multi-paper request is ambiguous, such as `总结这些文献`, the runtime asks the configured OpenAI-compatible provider to classify the task type and requires a JSON-only answer. The plan preview shows the recognized type, whether it came from local keywords or AI classification, the confidence, and the reason before the user confirms execution.
+
+For `multi-paper-commonality-note`, the prompt includes all selected paper metadata and abstracts in the same prompt. It asks the model to compare the papers and extract shared research themes, shared concepts or mechanisms, method/object/data intersections, converging findings, tensions, grouping rationale, and follow-up reading questions.
+
+The result is recorded as a standalone local Research Note Draft with `promptTaskTemplateId: multi-paper-commonality-note`. It appears in `最近草稿`, is automatically loaded into the main `生成结果` reading area after the task completes, and can then be explicitly saved to Zotero as a standalone note through `确认并写入 Zotero 笔记`. This path is not a per-paper translation or per-paper summary batch.
+
+AI Task Workspace job and task states are shown with Chinese user-facing labels such as `待确认`, `待执行`, `运行中`, and `已完成` instead of raw internal state names.
 
 ## Local Export Import Behavior
 

@@ -3,29 +3,42 @@ function createWorkbenchSelectedPaperRuntime({ getZotero, console } = {}) {
   const consoleAdapter = console || null;
 
   function readSelectedPaperContext() {
-    const item = getSelectedRegularItem();
-    if (!item) {
-      return null;
-    }
-
-    return normalizePaperContext({
-      key: item.key,
-      itemType: item.itemType || item.getField?.("itemType"),
-      title: item.getField?.("title"),
-      abstractNote: item.getField?.("abstractNote"),
-      doi: item.getField?.("DOI"),
-      publicationTitle: item.getField?.("publicationTitle") || item.getField?.("bookTitle"),
-      date: item.getField?.("date"),
-      creators: item.getCreators?.() || [],
-      pdfAttachment: readSelectedPaperPdfAttachment(item)
-    });
+    return readSelectedPaperContexts()[0] || null;
   }
 
-  function getSelectedRegularItem() {
+  function readSelectedPaperContexts() {
+    const items = getSelectedRegularItems();
+    if (!items.length) {
+      return [];
+    }
+
+    return items.map((item) =>
+      normalizePaperContext({
+        key: item.key,
+        itemType: item.itemType || item.getField?.("itemType"),
+        title: item.getField?.("title"),
+        abstractNote: item.getField?.("abstractNote"),
+        doi: item.getField?.("DOI"),
+        publicationTitle: item.getField?.("publicationTitle") || item.getField?.("bookTitle"),
+        date: item.getField?.("date"),
+        creators: item.getCreators?.() || [],
+        pdfAttachment: readSelectedPaperPdfAttachment(item)
+      })
+    );
+  }
+
+  function getSelectedRegularItems() {
     const Zotero = zoteroProvider();
     const win = Zotero?.getMainWindow?.();
     const selectedItems = win?.ZoteroPane?.getSelectedItems?.() || Zotero?.Pane?.getSelectedItems?.() || [];
-    return selectedItems.find((entry) => entry && !entry.isNote?.() && !entry.isAttachment?.()) || null;
+    if (!Array.isArray(selectedItems)) {
+      return [];
+    }
+    return selectedItems.filter((entry) => entry && !entry.isNote?.() && !entry.isAttachment?.());
+  }
+
+  function getSelectedRegularItem() {
+    return getSelectedRegularItems()[0] || null;
   }
 
   function readSelectedPaperPdfAttachment(item) {
@@ -58,7 +71,9 @@ function createWorkbenchSelectedPaperRuntime({ getZotero, console } = {}) {
 
   return {
     getSelectedRegularItem,
+    getSelectedRegularItems,
     readSelectedPaperContext,
+    readSelectedPaperContexts,
     readSelectedPaperPdfAttachment
   };
 }

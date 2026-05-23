@@ -74,7 +74,9 @@ function buildZoteroNoteHtml({ draft, savedAt }) {
   const context = draft?.inputContext || {};
   const timestamp = cleanText(savedAt) || new Date().toISOString();
   const noteKind =
-    draft?.promptTaskTemplateId === "reading-context-chinese-translation"
+    draft?.promptTaskTemplateId === "multi-paper-commonality-note"
+      ? "Zotero 研究工作台 - 共同点笔记"
+      : draft?.promptTaskTemplateId === "reading-context-chinese-translation"
       ? "Zotero 研究工作台 - 阅读上下文翻译"
       : "Zotero 研究工作台 - 文献总结";
   const metadata = buildZoteroNoteMetadata({ context, draft });
@@ -94,6 +96,14 @@ function buildZoteroNoteHtml({ draft, savedAt }) {
 }
 
 function buildZoteroNoteMetadata({ context, draft }) {
+  if (draft?.promptTaskTemplateId === "multi-paper-commonality-note") {
+    const papers = Array.isArray(context.selectedPapers) ? context.selectedPapers : [];
+    return [
+      ["任务", context.requestText || "共同点综合"],
+      ["文献数量", papers.length ? String(papers.length) : "未记录"],
+      ["来源文献", papers.map((paper) => cleanText(paper?.title)).filter(Boolean).join("；") || "未记录"]
+    ];
+  }
   if (draft?.promptTaskTemplateId === "reading-context-chinese-translation") {
     return [
       ["标题", context.title || draft?.title || "未命名条目"],
@@ -212,7 +222,7 @@ function listRecentSummaryDrafts(snapshot, limit = 5) {
     .filter(
       (draft) =>
         draft?.confirmationState === "draft" &&
-        ["single-paper-chinese-summary", "reading-context-chinese-translation"].includes(
+        ["single-paper-chinese-summary", "reading-context-chinese-translation", "multi-paper-commonality-note"].includes(
           draft?.promptTaskTemplateId
         )
     )
@@ -224,7 +234,10 @@ function listRecentSummaryDrafts(snapshot, limit = 5) {
       title: cleanText(draft.title),
       content: cleanText(draft.content),
       createdAt: cleanText(draft.createdAt),
-      model: cleanText(draft.llmProviderId)
+      model: cleanText(draft.llmProviderId),
+      promptTaskTemplateId: cleanText(draft.promptTaskTemplateId),
+      inputContext: cloneSnapshot(draft.inputContext || {}),
+      confirmationState: cleanText(draft.confirmationState)
     }));
 }
 

@@ -2,7 +2,7 @@
 
 ## Product
 
-Zotero Research Workbench is a Zotero 8/9-only plugin for a single-paper reading workflow. The first version is intentionally narrow: it helps one user inspect the current Zotero selection, call an OpenAI-compatible LLM provider, create local research drafts, explicitly save confirmed notes to Zotero, and review local graph/work identity records.
+Zotero Research Workbench is a Zotero 8/9-only plugin for multi-paper synthesis and research-note workflows. The first version is intentionally narrow: it helps one user inspect the current Zotero selection, call an OpenAI-compatible LLM provider, create local research drafts, explicitly save confirmed notes to Zotero, and review local graph/work identity records.
 
 ## Domain Glossary
 
@@ -135,6 +135,9 @@ The plugin-owned JSON snapshot stored in Zotero preferences. It contains researc
 **Research Note Draft**
 A generated local draft created before any Zotero note write. It records the selected paper context, generated content, provider/model provenance, and confirmation state.
 
+**Commonality Note Draft**
+A Research Note Draft generated from multiple selected papers as one synthesis task. It records the source paper set and extracts shared research themes, concepts, mechanisms, methods, converging findings, tensions, and grouping rationale. It is not a per-paper translation or per-paper summary batch.
+
 **Confirmed Research Note**
 A Zotero child note written only after the user explicitly clicks `确认并写入 Zotero 笔记`. This is the main intentional Zotero-native write in the first version.
 
@@ -189,6 +192,7 @@ A Workbench Local Store-only test record inserted for human UI verification. Man
 - An **AI Task** has exactly one **AI Task State** at a time.
 - A **Provider Concurrency Limit** controls how many **AI Tasks** may run against one LLM Provider concurrently.
 - An **AI Task** may produce a **Research Note Draft** or a local review record.
+- A current-selection multi-paper synthesis **AI Job** should create one **Commonality Note Draft** task over the selected set, not one summary task per paper.
 - An **AI Task** may end as a **Task Skip** after bounded retries for recoverable per-paper failures.
 - An **AI Job** may finish with partial success and include **Job Failure Diagnosis** when failures indicate a systemic issue.
 - A **Failure Diagnosis Threshold** is reached at three failures for small jobs, thirty percent failure rate for larger jobs, five consecutive failures, or any systemic provider, connector, or authentication failure.

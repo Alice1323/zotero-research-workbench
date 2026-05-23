@@ -11,8 +11,26 @@ async function writeZoteroChildNote({ Zotero, parentItem, html } = {}) {
   return { noteKey: note.key || "" };
 }
 
+async function writeZoteroStandaloneNote({ Zotero, libraryId, html } = {}) {
+  if (!Zotero?.Item) {
+    throw new Error("无法写入 Zotero 笔记");
+  }
+  const normalizedLibraryId = Number(libraryId || Zotero?.Libraries?.userLibraryID);
+  if (!Number.isFinite(normalizedLibraryId) || normalizedLibraryId <= 0) {
+    throw new Error("无法确定 Zotero 文库");
+  }
+
+  const note = new Zotero.Item("note");
+  note.libraryID = normalizedLibraryId;
+  note.setNote(String(html || ""));
+  await note.saveTx();
+
+  return { noteKey: note.key || "" };
+}
+
 const WorkbenchZoteroNoteWriter = {
-  writeZoteroChildNote
+  writeZoteroChildNote,
+  writeZoteroStandaloneNote
 };
 
 if (typeof module !== "undefined" && module.exports) {

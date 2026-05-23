@@ -11,6 +11,7 @@ const {
   removePromptOverrideTransaction,
   promoteGraphSeedTransaction,
   recordAiTaskQueueResultTransaction,
+  recordAiTaskQueueResultWithDraftsTransaction,
   replaceWorkbenchSnapshotFromImportTransaction,
   reviewGraphSeedTransaction,
   upsertPromptOverrideTransaction
@@ -260,6 +261,70 @@ test("recordAiTaskQueueResultTransaction stores results failures skips and diagn
   assert.equal(result.snapshot.aiTaskSkips.length, 1);
   assert.equal(result.snapshot.aiJobDiagnoses.length, 1);
   assert.equal(result.snapshot.taskLedger.at(-1).workflowStep, "run-ai-task-queue");
+});
+
+test("recordAiTaskQueueResultWithDraftsTransaction creates a standalone commonality note draft", () => {
+  const result = recordAiTaskQueueResultWithDraftsTransaction({
+    snapshot: {
+      schemaVersion: 1,
+      exportedAt: "old",
+      researchNoteDrafts: [],
+      aiJobs: [{ id: "job-common", state: "confirmed" }],
+      aiTasks: [{ id: "task-common", jobId: "job-common", state: "queued" }],
+      aiTaskResults: [],
+      aiTaskFailures: [],
+      aiTaskSkips: [],
+      aiJobDiagnoses: [],
+      taskLedger: []
+    },
+    queueResult: {
+      job: { id: "job-common", state: "completed", provider: { id: "provider", model: "model-a" } },
+      tasks: [
+        {
+          id: "task-common",
+          jobId: "job-common",
+          taskType: "multi-paper-commonality-note",
+          state: "succeeded",
+          promptTemplateId: "multi-paper-commonality-note",
+          model: "model-a",
+          inputScope: {
+            requestText: "找共同点",
+            selectedPapers: [
+              { zoteroItemKey: "ITEM1", title: "Paper A", doi: "10.1000/a" },
+              { zoteroItemKey: "ITEM2", title: "Paper B", doi: "10.1000/b" }
+            ]
+          }
+        }
+      ],
+      results: [
+        {
+          jobId: "job-common",
+          taskId: "task-common",
+          taskType: "multi-paper-commonality-note",
+          promptTemplateId: "multi-paper-commonality-note",
+          model: "model-a",
+          title: "共同点笔记：代谢与炎症",
+          content: "这些文献共同讨论代谢异常与炎症机制。"
+        }
+      ],
+      failures: [],
+      skips: [],
+      diagnoses: []
+    },
+    recordedAt: "2026-05-22T03:02:30.000Z"
+  });
+
+  assert.equal(result.status, "ai-task-queue-recorded");
+  assert.equal(result.createdDraftIds.length, 1);
+  assert.equal(result.snapshot.researchNoteDrafts.length, 1);
+  assert.equal(result.snapshot.researchNoteDrafts[0].id, "draft-job-common-task-common-commonality-note");
+  assert.equal(result.snapshot.researchNoteDrafts[0].title, "共同点笔记：代谢与炎症");
+  assert.equal(result.snapshot.researchNoteDrafts[0].promptTaskTemplateId, "multi-paper-commonality-note");
+  assert.equal(result.snapshot.researchNoteDrafts[0].confirmationState, "draft");
+  assert.equal(result.snapshot.researchNoteDrafts[0].inputContext.selectedPapers.length, 2);
+  assert.equal(result.snapshot.researchNoteDrafts[0].provenance.writeTarget, "local-draft-only");
+  assert.equal(result.snapshot.taskLedger.at(-2).workflowStep, "run-ai-task-queue");
+  assert.equal(result.snapshot.taskLedger.at(-1).workflowStep, "create-research-note-draft");
 });
 
 test("markRunningAiJobsForManualResumeTransaction pauses interrupted jobs without auto resume", () => {

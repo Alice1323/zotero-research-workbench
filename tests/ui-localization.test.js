@@ -30,7 +30,7 @@ test("manifest presents Chinese product name and description", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 
   assert.equal(manifest.name, "Zotero 研究工作台");
-  assert.equal(manifest.description, "面向 Zotero 8/9 的单篇论文阅读与研究工作流插件。");
+  assert.equal(manifest.description, "面向 Zotero 8/9 的多篇文献综合与研究笔记工作流插件。");
 });
 
 test("Zotero tools menu uses Chinese label", () => {
@@ -49,6 +49,7 @@ test("research panel exposes Chinese LLM provider settings", () => {
     "选中文献",
     "AI 任务工作台",
     "任务需求",
+    "请找出当前选中文献的共同点，并生成一篇独立研究笔记",
     "生成任务计划",
     "计划预览",
     "确认并开始",
@@ -57,6 +58,7 @@ test("research panel exposes Chinese LLM provider settings", () => {
     "取消任务",
     "并发上限",
     "任务队列",
+    "任务生成结果",
     "失败诊断",
     "可继续任务",
     "成功",
@@ -177,6 +179,8 @@ test("research panel exposes Chinese LLM provider settings", () => {
   assert.match(panel, /id="ai-job-cancel"/);
   assert.match(panel, /id="ai-job-progress"/);
   assert.match(panel, /id="ai-task-queue-list"/);
+  assert.match(panel, /id="ai-task-results-list"/);
+  assert.match(panel, /id="ai-task-results-summary"/);
   assert.match(panel, /id="ai-job-diagnosis"/);
   assert.match(panel, /id="ai-job-resume-list"/);
   assert.match(panel, /id="save-paper-summary-note"/);
@@ -297,6 +301,9 @@ test("research panel runtime wires selected paper PDF attachment status", () => 
   assert.match(runtime, /normalizePaperContext/);
   assert.match(runtime, /selectBestPdfAttachment/);
   assert.match(runtime, /readSelectedPaperContext/);
+  assert.match(runtime, /readSelectedPaperContexts/);
+  assert.match(runtime, /WorkbenchSelectedPapers/);
+  assert.match(runtime, /function renderSelectedPaperContexts/);
   assert.match(runtime, /readSelectedPaperPdfAttachment/);
   assert.match(runtime, /function renderPaperPdfAttachment/);
   assert.match(runtime, /selected-paper-pdf/);
@@ -343,6 +350,8 @@ test("research panel runtime wires provider request guards", () => {
   assert.match(runtime, /assertLlmRuntimeRequestAllowed/);
   assert.match(runtime, /WorkbenchZoteroNoteWriter/);
   assert.match(runtime, /writeZoteroChildNote/);
+  assert.match(runtime, /writeZoteroStandaloneNote/);
+  assert.match(runtime, /multi-paper-commonality-note/);
   assert.doesNotMatch(runtime, /new Zotero\.Item\("note"\)/);
   assert.doesNotMatch(runtime, /note\.saveTx\(\)/);
   assert.match(runtime, /WorkbenchClipboardWriter/);
@@ -756,6 +765,7 @@ test("segmented filters refresh their owning read-only views", () => {
 test("ai task workspace runtime wires plan confirmation queue controls and persistence", () => {
   const panel = fs.readFileSync(path.join(root, "chrome/content/researchPanel.xhtml"), "utf8");
   const runtime = fs.readFileSync(path.join(root, "chrome/content/aiTaskWorkspace.js"), "utf8");
+  const paperSummaryRuntime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
 
   assert.match(panel, /aiTaskWorkspaceCore\.js/);
   assert.match(panel, /providerRequestPolicy\.js/);
@@ -765,13 +775,40 @@ test("ai task workspace runtime wires plan confirmation queue controls and persi
   assert.ok(panel.indexOf("aiTaskWorkspace.js") < panel.indexOf("paperSummary.js"));
   assert.match(runtime, /WorkbenchAiTaskWorkspace/);
   assert.match(runtime, /createDraftAiJobPlan/);
+  assert.match(runtime, /classifyAiTaskRequest/);
+  assert.match(runtime, /requestAiTaskClassification/);
+  assert.match(runtime, /classifyCurrentSelectionTaskRequest/);
+  assert.match(runtime, /needs-ai-classification/);
+  assert.match(runtime, /只输出 JSON/);
+  assert.match(runtime, /taskClassification/);
   assert.match(runtime, /confirmAndRunAiJob/);
+  assert.match(runtime, /createQueueProgressReadModel/);
+  assert.match(runtime, /renderAiTaskResults/);
+  assert.match(runtime, /formatAiJobStateLabel/);
+  assert.match(runtime, /formatAiTaskStateLabel/);
+  assert.match(runtime, /待确认/);
+  assert.match(runtime, /待执行/);
+  assert.match(runtime, /buildMultiPaperCommonalityPrompt/);
+  assert.match(runtime, /不要逐篇翻译或逐篇摘要/);
+  assert.match(runtime, /共同研究主题/);
+  assert.match(runtime, /共同点笔记/);
+  assert.match(runtime, /shouldPause:/);
+  assert.match(runtime, /currentAbortController\.abort\(\)/);
+  assert.match(runtime, /onProgress:/);
   assert.match(runtime, /pauseCurrentAiJob/);
   assert.match(runtime, /resumeCurrentAiJob/);
   assert.match(runtime, /cancelCurrentAiJob/);
   assert.match(runtime, /runOpenAICompatibleSummaryTask/);
+  assert.match(runtime, /readSelectedPaperContexts/);
+  assert.doesNotMatch(runtime, /selectedPapers:\s*\[paper\]/);
   assert.match(runtime, /ResearchPanelOrchestrator\.createAiTaskWorkspacePlanWorkflow/);
   assert.match(runtime, /ResearchPanelOrchestrator\.confirmAiTaskWorkspacePlanWorkflow/);
   assert.match(runtime, /ResearchPanelOrchestrator\.recordAiTaskWorkspaceQueueResultWorkflow/);
+  assert.match(runtime, /loadCreatedAiTaskDraft/);
+  assert.match(runtime, /createdDraftIds/);
+  assert.match(runtime, /WorkbenchPaperSummary\.loadDraftIntoSummaryReader/);
+  assert.match(paperSummaryRuntime, /function loadDraftIntoSummaryReader/);
+  assert.match(paperSummaryRuntime, /loadDraftIntoSummaryReader/);
+  assert.match(runtime, /AI 任务执行失败/);
   assert.doesNotMatch(runtime, /confirmAndRunAiJob\(\);/);
 });

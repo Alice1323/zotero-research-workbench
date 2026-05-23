@@ -118,6 +118,7 @@ Implementation plans are step-by-step execution documents for agentic workers.
 ## QA And Release
 
 - [First Run Manual QA](./first-run-manual-qa.md): manual verification checklist for the plugin in Zotero.
+- [v0.3.0 Release Closeout](./release-closeout-v0.3.0.md): final v0.3.0 artifact, verification, installation note, manual QA, and next-version candidates.
 - [v0.1 Release Checklist](./release-checklist-v0.1.md): historical release checklist for the first release.
 
 ## Agent Support Docs

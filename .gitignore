@@ -3,7 +3,13 @@ dist/*.json
 dist/*.zip
 dist/*.bak
 dist/*.xpi.*
+dist/**/*.xpi
+dist/**/*.json
+dist/**/*.zip
+dist/**/*.bak
+dist/**/*.xpi.*
 dist/package/
+!dist/README.md
 node_modules/
 tmp/
 *.log

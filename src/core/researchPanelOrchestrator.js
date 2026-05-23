@@ -169,6 +169,7 @@
       snapshot,
       requestText,
       selectedPapers,
+      taskClassification,
       provider,
       concurrencyLimit,
       createdAt
@@ -176,6 +177,7 @@
       const plan = aiTaskWorkspaceModule.createCurrentSelectionAiJobPlan({
         requestText,
         selectedPapers,
+        taskClassification,
         provider,
         concurrencyLimit,
         createdAt
@@ -204,9 +206,13 @@
     }
 
     function recordAiTaskWorkspaceQueueResultWorkflow({ snapshot, queueResult, recordedAt } = {}) {
-      const result = transactionModule.recordAiTaskQueueResultTransaction({ snapshot, queueResult, recordedAt });
+      const recordQueueResult =
+        transactionModule.recordAiTaskQueueResultWithDraftsTransaction ||
+        transactionModule.recordAiTaskQueueResultTransaction;
+      const result = recordQueueResult({ snapshot, queueResult, recordedAt });
       return {
         status: "aiTaskQueueRecorded",
+        createdDraftIds: Array.isArray(result.createdDraftIds) ? result.createdDraftIds : [],
         snapshot: result.snapshot,
         records: createPanelRecords(result.snapshot, {})
       };
@@ -312,6 +318,7 @@
     assertFunction(moduleValue, "createAiJobPlanTransaction", "WorkbenchLocalStoreTransaction Module");
     assertFunction(moduleValue, "createResearchNoteDraftTransaction", "WorkbenchLocalStoreTransaction Module");
     assertFunction(moduleValue, "recordAiTaskQueueResultTransaction", "WorkbenchLocalStoreTransaction Module");
+    assertFunction(moduleValue, "recordAiTaskQueueResultWithDraftsTransaction", "WorkbenchLocalStoreTransaction Module");
   }
 
   function assertAiTaskWorkspaceModule(moduleValue) {

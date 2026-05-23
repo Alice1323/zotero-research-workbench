@@ -742,6 +742,15 @@ test("listRecentSummaryDrafts returns summary drafts newest first", () => {
         promptTaskTemplateId: "other-template"
       },
       {
+        id: "commonality-note",
+        title: "共同点笔记",
+        content: "共同点内容",
+        createdAt: "2026-05-18T11:30:00.000Z",
+        llmProviderId: "model-c",
+        confirmationState: "draft",
+        promptTaskTemplateId: "multi-paper-commonality-note"
+      },
+      {
         id: "new-summary",
         title: "新草稿",
         content: "新内容",
@@ -759,14 +768,30 @@ test("listRecentSummaryDrafts returns summary drafts newest first", () => {
       title: "新草稿",
       content: "新内容",
       createdAt: "2026-05-18T12:00:00.000Z",
-      model: "model-b"
+      model: "model-b",
+      promptTaskTemplateId: "single-paper-chinese-summary",
+      inputContext: {},
+      confirmationState: "draft"
+    },
+    {
+      id: "commonality-note",
+      title: "共同点笔记",
+      content: "共同点内容",
+      createdAt: "2026-05-18T11:30:00.000Z",
+      model: "model-c",
+      promptTaskTemplateId: "multi-paper-commonality-note",
+      inputContext: {},
+      confirmationState: "draft"
     },
     {
       id: "old-summary",
       title: "旧草稿",
       content: "旧内容",
       createdAt: "2026-05-18T08:00:00.000Z",
-      model: "model-a"
+      model: "model-a",
+      promptTaskTemplateId: "single-paper-chinese-summary",
+      inputContext: {},
+      confirmationState: "draft"
     }
   ]);
 });
@@ -948,6 +973,29 @@ test("buildZoteroNoteHtml labels reading context translation drafts", () => {
   assert.match(html, /标题：Metformin and gut microbiota in PCOS/);
   assert.match(html, /页码：12/);
   assert.match(html, /肠道微生物组可能改变胰岛素抵抗。/);
+  assert.doesNotMatch(html, /Zotero 研究工作台 - 文献总结/);
+});
+
+test("buildZoteroNoteHtml labels multi-paper commonality drafts as standalone notes", () => {
+  const html = buildZoteroNoteHtml({
+    draft: {
+      title: "共同点笔记：代谢异常",
+      content: "共同研究主题：代谢异常。",
+      promptTaskTemplateId: "multi-paper-commonality-note",
+      llmProviderId: "moonshot-v1",
+      createdAt: "2026-05-18T12:00:00.000Z",
+      inputContext: {
+        requestText: "找共同点",
+        selectedPapers: [{ title: "Paper A" }, { title: "Paper B" }]
+      }
+    },
+    savedAt: "2026-05-18T13:00:00.000Z"
+  });
+
+  assert.match(html, /Zotero 研究工作台 - 共同点笔记/);
+  assert.match(html, /任务：找共同点/);
+  assert.match(html, /文献数量：2/);
+  assert.match(html, /来源文献：Paper A；Paper B/);
   assert.doesNotMatch(html, /Zotero 研究工作台 - 文献总结/);
 });
 

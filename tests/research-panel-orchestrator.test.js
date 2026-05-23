@@ -209,6 +209,100 @@ test("ai task workspace workflows create confirm and record a current-selection 
   assert.equal(recorded.records.aiTaskWorkspace.progress.succeeded, 1);
 });
 
+test("ai task workspace recording creates a commonality note draft for multi-paper synthesis", () => {
+  const orchestrator = createResearchPanelOrchestrator();
+  const draft = orchestrator.createAiTaskWorkspacePlanWorkflow({
+    snapshot: createSnapshot(),
+    requestText: "请找出这些文献的共同点",
+    selectedPapers: [
+      {
+        key: "ITEM1",
+        title: "Task Paper A",
+        authors: "Li Wang",
+        year: "2026",
+        publicationTitle: "Journal",
+        abstractNote: "abstract a",
+        doi: "10.1000/a"
+      },
+      {
+        key: "ITEM2",
+        title: "Task Paper B",
+        authors: "Mei Chen",
+        year: "2025",
+        publicationTitle: "Journal",
+        abstractNote: "abstract b",
+        doi: "10.1000/b"
+      }
+    ],
+    provider: { id: "provider", model: "model" },
+    concurrencyLimit: 2,
+    createdAt: "2026-05-22T04:10:00.000Z"
+  });
+  const confirmed = orchestrator.confirmAiTaskWorkspacePlanWorkflow({
+    snapshot: draft.snapshot,
+    jobId: draft.plan.job.id,
+    confirmedAt: "2026-05-22T04:11:00.000Z"
+  });
+  const task = confirmed.snapshot.aiTasks[0];
+
+  const recorded = orchestrator.recordAiTaskWorkspaceQueueResultWorkflow({
+    snapshot: confirmed.snapshot,
+    queueResult: {
+      job: { ...confirmed.snapshot.aiJobs[0], state: "completed" },
+      tasks: [{ ...task, state: "succeeded" }],
+      results: [
+        {
+          jobId: draft.plan.job.id,
+          taskId: task.id,
+          taskType: "multi-paper-commonality-note",
+          promptTemplateId: "multi-paper-commonality-note",
+          model: "model",
+          title: "共同点笔记：两篇任务论文",
+          content: "共同点正文"
+        }
+      ],
+      failures: [],
+      skips: [],
+      diagnoses: []
+    },
+    recordedAt: "2026-05-22T04:12:00.000Z"
+  });
+
+  assert.equal(recorded.status, "aiTaskQueueRecorded");
+  assert.equal(recorded.createdDraftIds.length, 1);
+  assert.equal(recorded.snapshot.researchNoteDrafts[0].promptTaskTemplateId, "multi-paper-commonality-note");
+  assert.equal(recorded.snapshot.researchNoteDrafts[0].content, "共同点正文");
+  assert.equal(recorded.snapshot.researchNoteDrafts[0].inputContext.selectedPapers.length, 2);
+  assert.equal(recorded.records.recentDrafts[0].id, recorded.snapshot.researchNoteDrafts[0].id);
+});
+
+test("ai task workspace plan workflow accepts an explicit task classification", () => {
+  const orchestrator = createResearchPanelOrchestrator();
+  const draft = orchestrator.createAiTaskWorkspacePlanWorkflow({
+    snapshot: createSnapshot(),
+    requestText: "请总结这些文献",
+    selectedPapers: [
+      { key: "ITEM1", title: "Task Paper A", abstractNote: "abstract a" },
+      { key: "ITEM2", title: "Task Paper B", abstractNote: "abstract b" }
+    ],
+    taskClassification: {
+      taskMode: "per-paper-summary",
+      source: "llm-classifier",
+      confidence: 0.81,
+      reason: "用户想要总结，未要求共同点"
+    },
+    provider: { id: "provider", model: "model" },
+    concurrencyLimit: 2,
+    createdAt: "2026-05-22T04:20:00.000Z"
+  });
+
+  assert.equal(draft.status, "aiJobPlanCreated");
+  assert.equal(draft.plan.job.taskMode, "per-paper-summary");
+  assert.equal(draft.plan.job.taskClassification.source, "llm-classifier");
+  assert.equal(draft.plan.tasks.length, 2);
+  assert.match(draft.plan.confirmation.summary, /AI 识别/);
+});
+
 test("research panel orchestrator browser script registers a factory without global collisions", () => {
   const context = {
     console,

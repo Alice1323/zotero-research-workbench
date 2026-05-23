@@ -80,7 +80,7 @@
   if (!WorkbenchZoteroNoteWriter) {
     throw new Error("WorkbenchZoteroNoteWriter runtime Module is unavailable");
   }
-  const { writeZoteroChildNote } = WorkbenchZoteroNoteWriter;
+  const { writeZoteroChildNote, writeZoteroStandaloneNote } = WorkbenchZoteroNoteWriter;
   const WorkbenchWebDavClient = window.WorkbenchWebDavClient;
   if (!WorkbenchWebDavClient) {
     throw new Error("WorkbenchWebDavClient runtime Module is unavailable");
@@ -256,6 +256,7 @@
   const {
     getSelectedRegularItem,
     readSelectedPaperContext,
+    readSelectedPaperContexts,
     readSelectedPaperPdfAttachment
   } = createBrowserSelectedPaperRuntime({
     window,
@@ -338,17 +339,19 @@
   }
 
   async function refreshSelectedPaper() {
-    const paper = readSelectedPaperContext();
+    const papers = readSelectedPaperContexts();
+    const paper = papers[0] || null;
+    window.WorkbenchSelectedPapers = papers;
     window.WorkbenchSelectedPaper = paper;
 
     if (!paper) {
       showStatus("paper-summary-status", "请先在 Zotero 中选中一篇文献");
-      renderPaperContext(null);
+      renderSelectedPaperContexts([]);
       return null;
     }
 
-    renderPaperContext(paper);
-    showStatus("paper-summary-status", "已读取选中文献");
+    renderSelectedPaperContexts(papers);
+    showStatus("paper-summary-status", papers.length > 1 ? `已读取 ${papers.length} 篇选中文献` : "已读取选中文献");
     return paper;
   }
 
@@ -448,8 +451,10 @@
 
   async function saveGeneratedResultToZoteroNote() {
     const summary = cleanText(getField("paper-summary-output").textContent);
-    const paper = window.WorkbenchSelectedPaper || (await refreshSelectedPaper());
-    if (!paper) {
+    const existingDraft = window.WorkbenchLastDraft || null;
+    const isStandaloneNote = existingDraft?.promptTaskTemplateId === "multi-paper-commonality-note";
+    const paper = isStandaloneNote ? window.WorkbenchSelectedPaper : window.WorkbenchSelectedPaper || (await refreshSelectedPaper());
+    if (!isStandaloneNote && !paper) {
       showStatus("paper-summary-status", "请先在 Zotero 中选中一篇文献");
       return;
     }
@@ -459,23 +464,28 @@
     }
 
     const Zotero = getZotero();
-    const parentItem = getSelectedRegularItem();
-    if (!Zotero?.Item || !parentItem?.id) {
+    const parentItem = isStandaloneNote ? null : getSelectedRegularItem();
+    if (!Zotero?.Item || (!isStandaloneNote && !parentItem?.id)) {
       showStatus("paper-summary-status", "无法读取 Zotero 选中文献");
       return;
     }
 
-    const draft = ensureCurrentDraft({ paper, summary });
+    const draft = isStandaloneNote ? existingDraft : ensureCurrentDraft({ paper, summary });
     const savedAt = new Date().toISOString();
     showStatus("paper-summary-status", "正在写入 Zotero 笔记...");
 
     try {
       const noteWrite = ResearchPanelOrchestrator.prepareZoteroNoteWrite({ draft, savedAt });
-      const { noteKey } = await writeZoteroChildNote({
-        Zotero,
-        parentItem,
-        html: noteWrite.html
-      });
+      const { noteKey } = isStandaloneNote
+        ? await writeZoteroStandaloneNote({
+            Zotero,
+            html: noteWrite.html
+          })
+        : await writeZoteroChildNote({
+            Zotero,
+            parentItem,
+            html: noteWrite.html
+          });
 
       const result = ResearchPanelOrchestrator.confirmDraftSavedToZoteroWorkflow({
         snapshot: loadWorkbenchSnapshot(),
@@ -881,13 +891,20 @@
     );
   }
 
-  function renderPaperContext(paper) {
+  function renderSelectedPaperContexts(papers) {
+    const selectedPapers = Array.isArray(papers) ? papers : [];
+    renderPaperContext(selectedPapers[0] || null, selectedPapers);
+  }
+
+  function renderPaperContext(paper, selectedPapers = []) {
+    const count = Array.isArray(selectedPapers) ? selectedPapers.length : paper ? 1 : 0;
     getField("selected-paper-title").textContent = paper?.title || "未选择文献";
     getField("selected-paper-meta").textContent = paper
-      ? `${paper.authors}｜${paper.year}｜${paper.publicationTitle}`
+      ? `${count > 1 ? `已选 ${count} 篇｜` : ""}${paper.authors}｜${paper.year}｜${paper.publicationTitle}`
       : "请在 Zotero 主窗口中选中一篇文献";
     renderPaperPdfAttachment(paper?.pdfAttachment);
-    getField("selected-paper-abstract").textContent = paper?.abstractNote || "";
+    getField("selected-paper-abstract").textContent =
+      count > 1 ? selectedPapers.map((entry, index) => `${index + 1}. ${entry.title}`).join("\n") : paper?.abstractNote || "";
   }
 
   function renderPaperPdfAttachment(pdfAttachment) {
@@ -1076,9 +1093,16 @@
   }
 
   function loadRecentDraft(draft) {
+    loadDraftIntoSummaryReader(draft, {
+      statusMessage: "已载入最近草稿",
+      draftStatusPrefix: "已载入草稿"
+    });
+  }
+
+  function loadDraftIntoSummaryReader(draft, { statusMessage, draftStatusPrefix } = {}) {
     getField("paper-summary-output").textContent = draft.content || "";
-    getField("paper-summary-status").textContent = "已载入最近草稿";
-    getField("paper-draft-status").textContent = `已载入草稿（${formatLocalTime(draft.createdAt)}）`;
+    getField("paper-summary-status").textContent = statusMessage || "已载入草稿";
+    getField("paper-draft-status").textContent = `${draftStatusPrefix || "已载入草稿"}（${formatLocalTime(draft.createdAt)}）`;
     window.WorkbenchLastSummary = draft.content || "";
     window.WorkbenchLastDraft = draft;
   }
@@ -1737,7 +1761,9 @@
     const context = draft?.inputContext || {};
     const timestamp = cleanText(savedAt) || new Date().toISOString();
     const noteKind =
-      draft?.promptTaskTemplateId === "reading-context-chinese-translation"
+      draft?.promptTaskTemplateId === "multi-paper-commonality-note"
+        ? "Zotero 研究工作台 - 共同点笔记"
+        : draft?.promptTaskTemplateId === "reading-context-chinese-translation"
         ? "Zotero 研究工作台 - 阅读上下文翻译"
         : "Zotero 研究工作台 - 文献总结";
     const metadata = buildZoteroNoteMetadata({ context, draft });
@@ -1757,6 +1783,14 @@
   }
 
   function buildZoteroNoteMetadata({ context, draft }) {
+    if (draft?.promptTaskTemplateId === "multi-paper-commonality-note") {
+      const papers = Array.isArray(context.selectedPapers) ? context.selectedPapers : [];
+      return [
+        ["任务", context.requestText || "共同点综合"],
+        ["文献数量", papers.length ? String(papers.length) : "未记录"],
+        ["来源文献", papers.map((paper) => cleanText(paper?.title)).filter(Boolean).join("；") || "未记录"]
+      ];
+    }
     if (draft?.promptTaskTemplateId === "reading-context-chinese-translation") {
       return [
         ["标题", context.title || draft?.title || "未命名条目"],
@@ -1944,7 +1978,7 @@
       .filter(
         (draft) =>
           draft?.confirmationState === "draft" &&
-          ["single-paper-chinese-summary", "reading-context-chinese-translation"].includes(
+          ["single-paper-chinese-summary", "reading-context-chinese-translation", "multi-paper-commonality-note"].includes(
             draft?.promptTaskTemplateId
           )
       )
@@ -1956,7 +1990,10 @@
         title: cleanText(draft.title),
         content: cleanText(draft.content),
         createdAt: cleanText(draft.createdAt),
-        model: cleanText(draft.llmProviderId)
+        model: cleanText(draft.llmProviderId),
+        promptTaskTemplateId: cleanText(draft.promptTaskTemplateId),
+        inputContext: cloneSnapshot(draft.inputContext || {}),
+        confirmationState: cleanText(draft.confirmationState)
       }));
   }
 
@@ -2852,6 +2889,7 @@
     listRecentSummaryDrafts,
     listRecentTaskLedger,
     loadWorkbenchSnapshot,
+    loadDraftIntoSummaryReader,
     loadRecentDraft,
     loadWebDavSettings,
     normalizeWebDavExportTarget,

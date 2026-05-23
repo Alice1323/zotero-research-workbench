@@ -366,6 +366,31 @@ function recordAiTaskQueueResultTransaction({ snapshot, queueResult, recordedAt 
   return { status: "ai-task-queue-recorded", jobId: job.id, snapshot: next };
 }
 
+function recordAiTaskQueueResultWithDraftsTransaction({ snapshot, queueResult, recordedAt } = {}) {
+  const timestamp = cleanText(recordedAt) || new Date().toISOString();
+  const recorded = recordAiTaskQueueResultTransaction({ snapshot, queueResult, recordedAt: timestamp });
+  let next = recorded.snapshot;
+  const createdDraftIds = [];
+  for (const draftInput of createCommonalityDraftInputsFromQueueResult(queueResult, timestamp)) {
+    if (next.researchNoteDrafts.some((draft) => cleanText(draft?.id) === draftInput.id)) {
+      continue;
+    }
+    const draftResult = createResearchNoteDraftTransaction({
+      snapshot: next,
+      draftInput,
+      createdAt: timestamp
+    });
+    next = draftResult.snapshot;
+    createdDraftIds.push(draftResult.draftId);
+  }
+
+  return {
+    ...recorded,
+    createdDraftIds,
+    snapshot: next
+  };
+}
+
 function markRunningAiJobsForManualResumeTransaction({ snapshot, interruptedAt } = {}) {
   const timestamp = cleanText(interruptedAt) || new Date().toISOString();
   const next = normalizeTransactionSnapshot(snapshot);
@@ -406,6 +431,69 @@ function markRunningAiJobsForManualResumeTransaction({ snapshot, interruptedAt }
     jobIds: [...affectedJobIds],
     snapshot: next
   };
+}
+
+function createCommonalityDraftInputsFromQueueResult(queueResult, createdAt) {
+  const job = clonePlain(queueResult?.job);
+  const tasksById = new Map(
+    (Array.isArray(queueResult?.tasks) ? queueResult.tasks : []).map((task) => [cleanText(task?.id), clonePlain(task)])
+  );
+  return (Array.isArray(queueResult?.results) ? queueResult.results : [])
+    .filter((result) => isCommonalityTaskResult(result, tasksById.get(cleanText(result?.taskId))))
+    .map((result) => {
+      const task = tasksById.get(cleanText(result?.taskId)) || {};
+      const taskId = cleanText(result?.taskId) || cleanText(task?.id) || "unknown-task";
+      const selectedPapers = normalizeCommonalitySelectedPapers(
+        result?.inputScope?.selectedPapers || task?.inputScope?.selectedPapers
+      );
+      const model = cleanText(result?.model) || cleanText(task?.model) || cleanText(job?.provider?.model);
+      return {
+        id: `draft-${cleanText(job?.id) || "unknown-job"}-${taskId}-commonality-note`,
+        title: cleanText(result?.title) || createCommonalityDraftTitle(selectedPapers),
+        content: cleanText(result?.content),
+        promptTaskTemplateId: "multi-paper-commonality-note",
+        llmProviderId: model,
+        inputContext: {
+          requestText: cleanText(task?.inputScope?.requestText || result?.inputScope?.requestText || job?.requestText),
+          selectedPapers
+        },
+        createdAt,
+        provenance: {
+          source: "ai-task-workspace",
+          aiJobId: cleanText(job?.id),
+          aiTaskId: taskId,
+          model,
+          writeTarget: "local-draft-only"
+        }
+      };
+    })
+    .filter((draft) => cleanText(draft.content));
+}
+
+function isCommonalityTaskResult(result, task) {
+  return (
+    cleanText(result?.taskType) === "multi-paper-commonality-note" ||
+    cleanText(result?.promptTemplateId) === "multi-paper-commonality-note" ||
+    cleanText(task?.taskType) === "multi-paper-commonality-note" ||
+    cleanText(task?.promptTemplateId) === "multi-paper-commonality-note"
+  );
+}
+
+function normalizeCommonalitySelectedPapers(papers) {
+  return (Array.isArray(papers) ? papers : []).map((paper) => ({
+    zoteroItemKey: cleanText(paper?.zoteroItemKey || paper?.key),
+    title: cleanText(paper?.title) || "未命名条目",
+    authors: cleanText(paper?.authors),
+    year: cleanText(paper?.year),
+    publicationTitle: cleanText(paper?.publicationTitle),
+    doi: cleanText(paper?.doi)
+  }));
+}
+
+function createCommonalityDraftTitle(selectedPapers) {
+  const count = Array.isArray(selectedPapers) ? selectedPapers.length : 0;
+  const firstTitle = cleanText(selectedPapers?.[0]?.title);
+  return firstTitle ? `共同点笔记：${firstTitle} 等 ${count || 1} 篇` : "共同点笔记";
 }
 
 function normalizeTransactionSnapshot(snapshot) {
@@ -520,6 +608,7 @@ const WorkbenchLocalStoreTransaction = {
   removePromptOverrideTransaction,
   promoteGraphSeedTransaction,
   recordAiTaskQueueResultTransaction,
+  recordAiTaskQueueResultWithDraftsTransaction,
   replaceWorkbenchSnapshotFromImportTransaction,
   reviewGraphSeedTransaction,
   upsertPromptOverrideTransaction
