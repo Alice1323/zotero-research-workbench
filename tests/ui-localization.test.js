@@ -384,14 +384,30 @@ test("research panel runtime wires v0.4 pipeline skeleton actions", () => {
   const createPlanBody = getFunctionBody(runtime, "createLiteratureDiscoveryPlan");
 
   assert.match(runtime, /function createLiteratureDiscoveryPlan/);
+  for (const runtimeFunction of [
+    "runLiteratureDiscoverySources",
+    "createSourceAdapters",
+    "createZoteroImportPlan",
+    "runZoteroWriteQueue",
+    "writeZoteroItemFromIntent",
+    "writeZoteroAttachmentFromIntent"
+  ]) {
+    assert.match(runtime, new RegExp(runtimeFunction));
+  }
   assert.match(runtime, /function renderDocumentCandidateReview/);
   assert.match(runtime, /function renderZoteroWriteQueue/);
   assert.match(runtime, /function readLiteratureDiscoverySources/);
   assert.match(createPlanBody, /ResearchPanelOrchestrator\.createLiteratureDiscoveryPlanWorkflow/);
   assert.match(createPlanBody, /WorkbenchLiteratureDiscoveryPlan/);
+  assert.match(runtime, /recordLiteratureDiscoveryCandidatesTransaction/);
+  assert.match(runtime, /createZoteroWriteQueueTransaction/);
+  assert.match(runtime, /recordZoteroWriteQueueResultTransaction/);
+  assert.match(runtime, /next\.entry\.writeIntent/);
   assert.match(runtime, /计划预览：来源/);
   assert.match(runtime, /不会自动写入 Zotero/);
   assert.match(runtime, /literature-discovery-create-plan"\)\.addEventListener\("click", createLiteratureDiscoveryPlan\)/);
+  assert.match(runtime, /literature-discovery-confirm-search"\)\.addEventListener\("click", runLiteratureDiscoverySources\)/);
+  assert.match(runtime, /zotero-import-plan-create"\)\.addEventListener\("click", createZoteroImportPlan\)/);
 });
 
 test("research panel runtime wires provider request guards", () => {

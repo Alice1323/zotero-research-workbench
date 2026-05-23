@@ -38,6 +38,9 @@
     throw new Error("WorkbenchLocalStoreTransaction runtime Module is unavailable");
   }
   const {
+    createZoteroWriteQueueTransaction,
+    recordLiteratureDiscoveryCandidatesTransaction,
+    recordZoteroWriteQueueResultTransaction,
     removePromptOverrideTransaction,
     replaceWorkbenchSnapshotFromImportTransaction,
     upsertPromptOverrideTransaction
@@ -127,6 +130,33 @@
     normalizePaperContext,
     selectBestPdfAttachment
   } = WorkbenchSelectedPaperRuntime;
+  const WorkbenchLiteratureDiscovery = window.WorkbenchLiteratureDiscovery;
+  if (!WorkbenchLiteratureDiscovery) {
+    throw new Error("WorkbenchLiteratureDiscovery runtime Module is unavailable");
+  }
+  const { mergeDiscoverySourceResults } = WorkbenchLiteratureDiscovery;
+  const WorkbenchLiteratureSourceAdapters = window.WorkbenchLiteratureSourceAdapters;
+  if (!WorkbenchLiteratureSourceAdapters) {
+    throw new Error("WorkbenchLiteratureSourceAdapters runtime Module is unavailable");
+  }
+  const WorkbenchZoteroWriteQueue = window.WorkbenchZoteroWriteQueue;
+  if (!WorkbenchZoteroWriteQueue) {
+    throw new Error("WorkbenchZoteroWriteQueue runtime Module is unavailable");
+  }
+  const {
+    createZoteroWriteQueue,
+    createZoteroWriteQueueReadModel,
+    recordZoteroWriteQueueEntryResult,
+    runNextZoteroWriteQueueEntry
+  } = WorkbenchZoteroWriteQueue;
+  const WorkbenchZoteroItemWriter = window.WorkbenchZoteroItemWriter;
+  if (!WorkbenchZoteroItemWriter) {
+    throw new Error("WorkbenchZoteroItemWriter runtime Module is unavailable");
+  }
+  const {
+    writeZoteroAttachmentFromIntent,
+    writeZoteroItemFromIntent
+  } = WorkbenchZoteroItemWriter;
   const SAFE_TEMPLATE_VARIABLES = new Set([
     "selectedText",
     "itemTitle",
@@ -1171,6 +1201,124 @@
     return sources;
   }
 
+  function readV04SourceSettings() {
+    return {
+      selectedSources: readLiteratureDiscoverySources(),
+      unpaywallEmail: cleanText(getField("literature-source-unpaywall-email")?.value),
+      connectorUrl: cleanText(getField("literature-source-http-connector-url")?.value),
+      connectorHeaders: parseConnectorHeaders(getField("literature-source-http-connector-headers")?.value)
+    };
+  }
+
+  function createSourceAdapters(settings = {}) {
+    const selectedSources = Array.isArray(settings.selectedSources) && settings.selectedSources.length
+      ? settings.selectedSources
+      : readLiteratureDiscoverySources();
+    const adapters = [];
+    if (selectedSources.includes("openalex")) {
+      adapters.push(WorkbenchLiteratureSourceAdapters.createOpenAlexAdapter({ fetchImpl: workbenchFetch }));
+    }
+    if (selectedSources.includes("crossref")) {
+      adapters.push(WorkbenchLiteratureSourceAdapters.createCrossrefAdapter({ fetchImpl: workbenchFetch }));
+    }
+    if (selectedSources.includes("unpaywall")) {
+      adapters.push(WorkbenchLiteratureSourceAdapters.createUnpaywallAdapter({
+        fetchImpl: workbenchFetch,
+        email: cleanText(settings.unpaywallEmail)
+      }));
+    }
+    if (selectedSources.includes("http-connector") && cleanText(settings.connectorUrl)) {
+      adapters.push(WorkbenchLiteratureSourceAdapters.createHttpConnectorAdapter({
+        fetchImpl: workbenchFetch,
+        endpointUrl: settings.connectorUrl,
+        headers: settings.connectorHeaders || {}
+      }));
+    }
+    return adapters;
+  }
+
+  async function runLiteratureDiscoverySources() {
+    let shouldRestoreButton = false;
+    try {
+      const plan = window.WorkbenchLiteratureDiscoveryPlan;
+      if (!plan?.job) {
+        throw new Error("请先生成发现计划");
+      }
+
+      const observedAt = new Date().toISOString();
+      const adapters = createSourceAdapters(readV04SourceSettings());
+      if (!adapters.length) {
+        throw new Error("请至少选择一个可执行的文献来源");
+      }
+
+      shouldRestoreButton = true;
+      setButtonDisabled("literature-discovery-confirm-search", true);
+      setText("document-candidate-review-status", "正在查询文献来源...");
+      const sourceResults = [];
+      for (const adapter of adapters) {
+        try {
+          sourceResults.push(await adapter.query({
+            topicId: plan.job.topicId,
+            requestText: plan.job.requestText,
+            sourceScopes: plan.job.sourceScopes,
+            maxCandidates: plan.job.maxCandidates,
+            selectedItems: readSelectedPaperContexts(),
+            dois: collectDiscoveryDois(plan),
+            observedAt
+          }));
+        } catch (error) {
+          sourceResults.push({
+            sourceAdapterId: adapter.sourceAdapterId || "unknown-source",
+            candidates: [],
+            failures: [createLayeredErrorNotice(error, "文献来源查询失败")]
+          });
+        }
+      }
+
+      const merged = mergeDiscoverySourceResults(sourceResults);
+      const snapshot = loadWorkbenchSnapshot();
+      const result = recordLiteratureDiscoveryCandidatesTransaction({
+        snapshot,
+        jobId: plan.job.id,
+        topicId: plan.job.topicId,
+        candidates: merged.candidates,
+        recordedAt: observedAt
+      });
+      saveWorkbenchSnapshot(result.snapshot);
+      const records = ResearchPanelOrchestrator.createPanelRecords(result.snapshot, { topicId: plan.job.topicId });
+      renderDocumentCandidateReview(records.candidateReview);
+      renderZoteroWriteQueue(records.zoteroWriteQueue);
+      setText(
+        "document-candidate-review-status",
+        `候选 ${result.candidateIds.length}｜来源失败 ${Array.isArray(merged.failures) ? merged.failures.length : 0}`
+      );
+      return { ...result, failures: merged.failures };
+    } catch (error) {
+      showDiscoveryError("文献发现失败", error);
+      return null;
+    } finally {
+      if (shouldRestoreButton) {
+        setButtonDisabled("literature-discovery-confirm-search", false);
+      }
+    }
+  }
+
+  function collectDiscoveryDois(plan) {
+    const dois = [];
+    const snapshot = loadWorkbenchSnapshot();
+    for (const candidate of Array.isArray(snapshot.documentCandidates) ? snapshot.documentCandidates : []) {
+      if (cleanText(candidate?.topicId) === cleanText(plan?.job?.topicId) && cleanText(candidate?.doi)) {
+        dois.push(cleanText(candidate.doi));
+      }
+    }
+    for (const paper of readSelectedPaperContexts()) {
+      if (cleanText(paper?.doi)) {
+        dois.push(cleanText(paper.doi));
+      }
+    }
+    return uniqueText(dois);
+  }
+
   function renderLiteratureDiscoveryPlanPreview(plan) {
     const preview = getField("literature-discovery-plan-preview");
     if (!preview) {
@@ -1209,10 +1357,14 @@
       return;
     }
     for (const candidate of candidates) {
-      appendRecordItem(list, {
+      const item = createRecordItem({
         title: candidate.title || "未命名候选文献",
         detail: `来源：${candidate.sourceAdapterId || "未记录"}｜异常：${(candidate.anomalyTags || []).join("、") || "无"}`
       });
+      if (candidate.quickImportAllowed) {
+        item.appendChild(createCandidateSelectionControl(candidate));
+      }
+      list.appendChild(item);
     }
   }
 
@@ -1227,9 +1379,223 @@
       appendEmptyRecord(list, "暂无写入任务");
       return;
     }
+    if (readModel?.activeQueue && !isTerminalWriteQueueState(readModel.activeQueue.state)) {
+      const actions = createHtmlElement("div");
+      actions.className = "actions";
+      actions.appendChild(createReviewButton("运行写入队列", () => runZoteroWriteQueue(readModel.activeQueue)));
+      list.appendChild(actions);
+    }
     for (const entry of entries) {
       appendRecordItem(list, { title: entry.title || entry.id, detail: entry.stateLabel || entry.state });
     }
+  }
+
+  function createCandidateSelectionControl(candidate) {
+    const label = createHtmlElement("label");
+    label.className = "record-meta";
+
+    const checkbox = createHtmlElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "zotero-import-candidate";
+    checkbox.dataset.candidateId = candidate.id;
+    checkbox.dataset.attachmentId = candidate.importableAttachmentIds?.[0] || "";
+    checkbox.dataset.importMode = candidate.importableAttachmentIds?.length
+      ? "zotero-item-plus-attachment"
+      : "zotero-item";
+
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(" 加入写入计划"));
+    return label;
+  }
+
+  function createZoteroImportPlan() {
+    const plan = window.WorkbenchLiteratureDiscoveryPlan;
+    if (!plan?.job) {
+      showDiscoveryError("创建写入计划失败", new Error("请先生成发现计划"));
+      return null;
+    }
+
+    try {
+      const createdAt = new Date().toISOString();
+      const selections = readZoteroImportSelections();
+      if (!selections.length) {
+        throw new Error("请先选择候选文献");
+      }
+
+      const snapshot = loadWorkbenchSnapshot();
+      const importResult = ResearchPanelOrchestrator.createZoteroImportPlanWorkflow({
+        snapshot,
+        topicId: plan.job.topicId,
+        selections,
+        createdAt
+      });
+      const queue = createZoteroWriteQueue({ importPlan: importResult.importPlan, createdAt });
+      const queueResult = createZoteroWriteQueueTransaction({
+        snapshot: importResult.snapshot,
+        queue,
+        createdAt
+      });
+      saveWorkbenchSnapshot(queueResult.snapshot);
+      const records = ResearchPanelOrchestrator.createPanelRecords(queueResult.snapshot, { topicId: plan.job.topicId });
+      renderDocumentCandidateReview(records.candidateReview);
+      renderZoteroWriteQueue(records.zoteroWriteQueue);
+      setText(
+        "document-candidate-review-status",
+        `写入计划已创建：条目 ${importResult.importPlan.expectedWrites.items}｜附件 ${importResult.importPlan.expectedWrites.attachments}`
+      );
+      return { ...importResult, queue, snapshot: queueResult.snapshot };
+    } catch (error) {
+      showDiscoveryError("创建写入计划失败", error);
+      return null;
+    }
+  }
+
+  async function runZoteroWriteQueue(queue) {
+    let current = queue || createZoteroWriteQueueReadModel(loadWorkbenchSnapshot()).activeQueue;
+    if (!current) {
+      showDiscoveryError("Zotero 写入失败", new Error("暂无写入队列"));
+      return null;
+    }
+
+    setButtonDisabled("zotero-import-plan-create", true);
+    try {
+      while (true) {
+        const next = runNextZoteroWriteQueueEntry({ queue: current, startedAt: new Date().toISOString() });
+        current = next.queue;
+        if (!next.entry) {
+          break;
+        }
+
+        let result;
+        try {
+          if (next.entry.writeIntent?.kind === "create-item") {
+            result = await writeZoteroItemFromIntent({ Zotero: getZotero(), intent: next.entry.writeIntent });
+          } else if (next.entry.writeIntent?.kind === "create-attachment") {
+            result = await writeZoteroAttachmentFromIntent({
+              Zotero: getZotero(),
+              intent: next.entry.writeIntent,
+              parentItemId: next.entry.resolvedZoteroItemId,
+              parentItemKey: next.entry.resolvedZoteroItemKey
+            });
+          } else {
+            throw new Error("不支持的 Zotero 写入意图");
+          }
+          current = recordZoteroWriteQueueEntryResult({
+            queue: next.queue,
+            entryId: next.entry.id,
+            result: { state: "succeeded", ...result },
+            completedAt: new Date().toISOString()
+          });
+        } catch (error) {
+          const notice = createLayeredErrorNotice(error, "Zotero 写入失败");
+          current = recordZoteroWriteQueueEntryResult({
+            queue: next.queue,
+            entryId: next.entry.id,
+            result: {
+              state: "failed",
+              userMessage: notice.userMessage,
+              technicalDetail: notice.technicalDetail,
+              errorReason: notice.userMessage
+            },
+            completedAt: new Date().toISOString()
+          });
+        }
+
+        persistZoteroWriteQueueResult(current, next.entry);
+        renderZoteroWriteQueue(createZoteroWriteQueueReadModel({ zoteroWriteQueues: [current] }, { topicId: current.topicId }));
+      }
+      persistZoteroWriteQueueResult(current, null);
+      renderZoteroWriteQueue(createZoteroWriteQueueReadModel({ zoteroWriteQueues: [current] }, { topicId: current.topicId }));
+      setText("document-candidate-review-status", "Zotero 写入队列已执行");
+      return current;
+    } catch (error) {
+      showDiscoveryError("Zotero 写入失败", error);
+      return current;
+    } finally {
+      setButtonDisabled("zotero-import-plan-create", false);
+    }
+  }
+
+  function persistZoteroWriteQueueResult(queue, entry) {
+    const snapshot = loadWorkbenchSnapshot();
+    const result = recordZoteroWriteQueueResultTransaction({
+      snapshot,
+      queue,
+      result: entry
+        ? {
+            id: `${queue.id}-${entry.id}-${createStableTimestamp(new Date().toISOString())}`,
+            queueId: queue.id,
+            entryId: entry.id,
+            state: queue.entries.find((candidate) => candidate.id === entry.id)?.state || entry.state,
+            recordedAt: new Date().toISOString()
+          }
+        : null,
+      recordedAt: new Date().toISOString()
+    });
+    saveWorkbenchSnapshot(result.snapshot);
+  }
+
+  function readZoteroImportSelections() {
+    return Array.from(document.querySelectorAll(".zotero-import-candidate"))
+      .filter((checkbox) => checkbox.checked)
+      .map((checkbox) => ({
+        candidateId: cleanText(checkbox.dataset.candidateId),
+        importMode: cleanText(checkbox.dataset.importMode) || "zotero-item",
+        attachmentId: cleanText(checkbox.dataset.attachmentId)
+      }))
+      .filter((selection) => selection.candidateId);
+  }
+
+  function parseConnectorHeaders(value) {
+    const text = cleanText(value);
+    if (!text) {
+      return {};
+    }
+    try {
+      const parsed = JSON.parse(text);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch (_error) {
+      throw new Error("HTTP Connector headers 必须是 JSON 对象");
+    }
+  }
+
+  function showDiscoveryError(fallbackMessage, error) {
+    const notice = createLayeredErrorNotice(error, fallbackMessage);
+    setText("document-candidate-review-status", notice.userMessage);
+  }
+
+  function setText(fieldId, text) {
+    const field = getField(fieldId);
+    if (field) {
+      field.textContent = text;
+    }
+  }
+
+  function setButtonDisabled(fieldId, disabled) {
+    const button = getField(fieldId);
+    if (!button) {
+      return;
+    }
+    if (disabled) {
+      button.setAttribute("disabled", "disabled");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  function uniqueText(values) {
+    const result = [];
+    for (const value of Array.isArray(values) ? values : []) {
+      const text = cleanText(value);
+      if (text && !result.includes(text)) {
+        result.push(text);
+      }
+    }
+    return result;
+  }
+
+  function isTerminalWriteQueueState(state) {
+    return ["completed", "completed-with-failures", "failed", "cancelled"].includes(cleanText(state));
   }
 
   function createCurrentGraphReviewReadModel(snapshot = loadWorkbenchSnapshot()) {
@@ -2966,6 +3332,8 @@
     getField("refresh-citation-graph-inspector").addEventListener("click", renderCitationGraphInspector);
     getField("refresh-graph-seed-review").addEventListener("click", renderGraphSeedReviewQueue);
     getField("literature-discovery-create-plan").addEventListener("click", createLiteratureDiscoveryPlan);
+    getField("literature-discovery-confirm-search").addEventListener("click", runLiteratureDiscoverySources);
+    getField("zotero-import-plan-create").addEventListener("click", createZoteroImportPlan);
     getField("prompt-template-selector").addEventListener("change", loadPromptTemplateEditor);
     getField("prompt-template-save").addEventListener("click", savePromptTemplateOverride);
     getField("prompt-template-reset").addEventListener("click", resetPromptTemplateOverride);
@@ -2998,6 +3366,8 @@
     createGraphSeedInput,
     createReadingTranslationDraftInput,
     createSummaryDraftInput,
+    createSourceAdapters,
+    createZoteroImportPlan,
     copyGeneratedResult,
     exportWorkbenchState,
     exportWorkbenchZip,
@@ -3024,6 +3394,8 @@
     parseChatCompletionText,
     readSelectedPaperContext,
     readSelectedPaperPdfAttachment,
+    runLiteratureDiscoverySources,
+    runZoteroWriteQueue,
     renderRecentDrafts,
     renderGraphSeedReviewQueue,
     initializeSegmentedFilters,
