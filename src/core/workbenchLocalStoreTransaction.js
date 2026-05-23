@@ -15,6 +15,13 @@ const SAFE_PROMPT_TEMPLATE_VARIABLES = new Set([
   "userQuery"
 ]);
 
+const ResearchTopic =
+  typeof require === "function"
+    ? require("./researchTopic")
+    : typeof window !== "undefined"
+      ? window.WorkbenchResearchTopic
+      : null;
+
 function createResearchNoteDraftTransaction({ snapshot, draftInput, createdAt } = {}) {
   const timestamp = cleanText(createdAt) || new Date().toISOString();
   const draft = normalizeDraftInput(draftInput);
@@ -366,6 +373,72 @@ function recordAiTaskQueueResultTransaction({ snapshot, queueResult, recordedAt 
   return { status: "ai-task-queue-recorded", jobId: job.id, snapshot: next };
 }
 
+function createLiteratureDiscoveryPlanTransaction({ snapshot, plan, createdAt } = {}) {
+  const timestamp = cleanText(createdAt) || new Date().toISOString();
+  const next = normalizeTransactionSnapshot(snapshot);
+  const job = clonePlain(plan?.job);
+  if (!cleanText(job.id)) {
+    throw new Error("发现任务 id 不能为空");
+  }
+
+  upsertRecordById(next.literatureDiscoveryJobs, job);
+  next.taskLedger.push({
+    id: `task-${job.id}-create-literature-discovery-plan`,
+    workflowStep: "create-literature-discovery-plan",
+    state: "completed",
+    providerId: null,
+    promptTaskTemplateId: null,
+    outputLocation: { jobId: job.id, topicId: job.topicId },
+    errorNotice: null,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    provenance: { source: "explicit-user-action", writeTarget: "local-snapshot-only" }
+  });
+  next.exportedAt = timestamp;
+  return { status: "literature-discovery-plan-created", jobId: job.id, snapshot: next };
+}
+
+function recordLiteratureDiscoveryCandidatesTransaction({ snapshot, jobId, topicId, candidates, recordedAt } = {}) {
+  const timestamp = cleanText(recordedAt) || new Date().toISOString();
+  const normalizedJobId = cleanText(jobId);
+  const normalizedTopicId = cleanText(topicId);
+  const next = normalizeTransactionSnapshot(snapshot);
+  const candidateIds = [];
+
+  for (const candidate of Array.isArray(candidates) ? candidates : []) {
+    const normalized = {
+      ...clonePlain(candidate),
+      topicId: cleanText(candidate?.topicId) || normalizedTopicId
+    };
+    if (!cleanText(normalized.id)) {
+      continue;
+    }
+    upsertRecordById(next.documentCandidates, normalized);
+    candidateIds.push(cleanText(normalized.id));
+  }
+
+  linkTopicInPlace(next, {
+    topicId: normalizedTopicId,
+    candidateIds,
+    aiJobIds: [normalizedJobId],
+    updatedAt: timestamp
+  });
+  next.taskLedger.push({
+    id: `task-${normalizedJobId}-record-literature-candidates-${createStableTimestamp(timestamp)}`,
+    workflowStep: "record-literature-discovery-candidates",
+    state: "completed",
+    providerId: null,
+    promptTaskTemplateId: null,
+    outputLocation: { jobId: normalizedJobId, topicId: normalizedTopicId, candidateIds },
+    errorNotice: null,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    provenance: { source: "source-adapters", writeTarget: "local-snapshot-only" }
+  });
+  next.exportedAt = timestamp;
+  return { status: "literature-discovery-candidates-recorded", jobId: normalizedJobId, candidateIds, snapshot: next };
+}
+
 function recordAiTaskQueueResultWithDraftsTransaction({ snapshot, queueResult, recordedAt } = {}) {
   const timestamp = cleanText(recordedAt) || new Date().toISOString();
   const recorded = recordAiTaskQueueResultTransaction({ snapshot, queueResult, recordedAt: timestamp });
@@ -518,6 +591,10 @@ function normalizeTransactionSnapshot(snapshot) {
     graphSeeds: Array.isArray(input.graphSeeds) ? input.graphSeeds : [],
     citationRelations: Array.isArray(input.citationRelations) ? input.citationRelations : [],
     taskLedger: Array.isArray(input.taskLedger) ? input.taskLedger : [],
+    researchTopics: Array.isArray(input.researchTopics) ? input.researchTopics : [],
+    documentCandidates: Array.isArray(input.documentCandidates) ? input.documentCandidates : [],
+    literatureDiscoveryJobs: Array.isArray(input.literatureDiscoveryJobs) ? input.literatureDiscoveryJobs : [],
+    literatureDiscoveryFailures: Array.isArray(input.literatureDiscoveryFailures) ? input.literatureDiscoveryFailures : [],
     aiJobs: Array.isArray(input.aiJobs) ? input.aiJobs : [],
     aiTasks: Array.isArray(input.aiTasks) ? input.aiTasks : [],
     aiTaskResults: Array.isArray(input.aiTaskResults) ? input.aiTaskResults : [],
@@ -525,6 +602,20 @@ function normalizeTransactionSnapshot(snapshot) {
     aiTaskSkips: Array.isArray(input.aiTaskSkips) ? input.aiTaskSkips : [],
     aiJobDiagnoses: Array.isArray(input.aiJobDiagnoses) ? input.aiJobDiagnoses : []
   };
+}
+
+function linkTopicInPlace(snapshot, links) {
+  if (!ResearchTopic?.linkRecordsToResearchTopic) {
+    return;
+  }
+  const result = ResearchTopic.linkRecordsToResearchTopic({
+    snapshot,
+    topicId: links.topicId,
+    candidateIds: links.candidateIds,
+    aiJobIds: links.aiJobIds,
+    updatedAt: links.updatedAt
+  });
+  snapshot.researchTopics = result.snapshot.researchTopics;
 }
 
 function normalizeDraftInput(draftInput) {
@@ -603,12 +694,14 @@ const WorkbenchLocalStoreTransaction = {
   confirmAiJobPlanTransaction,
   confirmResearchNoteDraftSavedToZoteroTransaction,
   createAiJobPlanTransaction,
+  createLiteratureDiscoveryPlanTransaction,
   createResearchNoteDraftTransaction,
   markRunningAiJobsForManualResumeTransaction,
   removePromptOverrideTransaction,
   promoteGraphSeedTransaction,
   recordAiTaskQueueResultTransaction,
   recordAiTaskQueueResultWithDraftsTransaction,
+  recordLiteratureDiscoveryCandidatesTransaction,
   replaceWorkbenchSnapshotFromImportTransaction,
   reviewGraphSeedTransaction,
   upsertPromptOverrideTransaction

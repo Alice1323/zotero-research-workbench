@@ -113,6 +113,8 @@ function normalizeSnapshotForImport(snapshot) {
     taskLedger: Array.isArray(snapshot.taskLedger) ? snapshot.taskLedger : [],
     researchTopics: Array.isArray(snapshot.researchTopics) ? snapshot.researchTopics : [],
     documentCandidates: Array.isArray(snapshot.documentCandidates) ? snapshot.documentCandidates : [],
+    literatureDiscoveryJobs: Array.isArray(snapshot.literatureDiscoveryJobs) ? snapshot.literatureDiscoveryJobs : [],
+    literatureDiscoveryFailures: Array.isArray(snapshot.literatureDiscoveryFailures) ? snapshot.literatureDiscoveryFailures : [],
     aiJobs: Array.isArray(snapshot.aiJobs) ? snapshot.aiJobs : [],
     aiTasks: Array.isArray(snapshot.aiTasks) ? snapshot.aiTasks : [],
     aiTaskResults: Array.isArray(snapshot.aiTaskResults) ? snapshot.aiTaskResults : [],

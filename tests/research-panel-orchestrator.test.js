@@ -303,6 +303,48 @@ test("ai task workspace plan workflow accepts an explicit task classification", 
   assert.match(draft.plan.confirmation.summary, /AI 识别/);
 });
 
+test("literature discovery workflow creates a draft plan and read model", () => {
+  const orchestrator = createResearchPanelOrchestrator({
+    literatureDiscoveryModule: {
+      createLiteratureDiscoveryJobPlan: ({ topicId }) => ({
+        job: { id: "job-a", topicId, state: "draft", createdAt: "2026-05-23T12:00:00.000Z" },
+        confirmation: { required: true }
+      }),
+      createLiteratureDiscoveryReadModel: (snapshot, { topicId }) => ({
+        jobs: (snapshot.literatureDiscoveryJobs || []).filter((job) => job.topicId === topicId),
+        candidateCount: 0
+      })
+    },
+    transactionModule: {
+      confirmAiJobPlanTransaction() {},
+      confirmResearchNoteDraftSavedToZoteroTransaction() {},
+      createAiJobPlanTransaction() {},
+      createLiteratureDiscoveryPlanTransaction: ({ snapshot, plan }) => ({
+        status: "literature-discovery-plan-created",
+        snapshot: {
+          ...snapshot,
+          literatureDiscoveryJobs: [plan.job]
+        }
+      }),
+      createResearchNoteDraftTransaction() {},
+      recordAiTaskQueueResultTransaction() {},
+      recordAiTaskQueueResultWithDraftsTransaction() {},
+      recordLiteratureDiscoveryCandidatesTransaction() {}
+    }
+  });
+
+  const result = orchestrator.createLiteratureDiscoveryPlanWorkflow({
+    snapshot: createSnapshot(),
+    topicId: "topic-a",
+    requestText: "query",
+    createdAt: "2026-05-23T12:00:00.000Z"
+  });
+
+  assert.equal(result.status, "literatureDiscoveryPlanCreated");
+  assert.equal(result.plan.job.id, "job-a");
+  assert.equal(result.records.literatureDiscovery.jobs[0].id, "job-a");
+});
+
 test("research panel orchestrator browser script registers a factory without global collisions", () => {
   const context = {
     console,
@@ -314,6 +356,8 @@ test("research panel orchestrator browser script registers a factory without glo
   for (const fileName of [
     "providerRequestPolicy.js",
     "aiTaskWorkspace.js",
+    "documentCandidateProtocol.js",
+    "literatureDiscovery.js",
     "workbenchLocalStoreTransaction.js",
     "graphSeed.js",
     "workIdentity.js",

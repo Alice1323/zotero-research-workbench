@@ -36,6 +36,12 @@ test("build script exists and documents the runtime package boundary", () => {
   assert.match(script, /workbenchSnapshot\.js/);
   assert.match(script, /src\/core\/workbenchRuntimeStore\.js/);
   assert.match(script, /workbenchRuntimeStore\.js/);
+  assert.match(script, /src\/core\/researchTopic\.js/);
+  assert.match(script, /researchTopic\.js/);
+  assert.match(script, /src\/core\/documentCandidateProtocol\.js/);
+  assert.match(script, /documentCandidateProtocol\.js/);
+  assert.match(script, /src\/core\/literatureDiscovery\.js/);
+  assert.match(script, /literatureDiscovery\.js/);
   assert.match(script, /src\/core\/workbenchLocalStoreTransaction\.js/);
   assert.match(script, /workbenchLocalStoreTransaction\.js/);
   assert.match(script, /src\/core\/graphReviewWorkflow\.js/);
@@ -73,6 +79,18 @@ test("build script exists and documents the runtime package boundary", () => {
   assert.match(readme, /WebDAV 密码/);
 });
 
+test("research panel loads v0.4 core modules before dependent runtime modules", () => {
+  const panel = fs.readFileSync(path.join(root, "chrome", "content", "researchPanel.xhtml"), "utf8");
+  const indexOfScript = (scriptName) => panel.indexOf(`src="${scriptName}"`);
+
+  assert.ok(indexOfScript("researchTopic.js") >= 0);
+  assert.ok(indexOfScript("documentCandidateProtocol.js") >= 0);
+  assert.ok(indexOfScript("literatureDiscovery.js") >= 0);
+  assert.ok(indexOfScript("researchTopic.js") < indexOfScript("workbenchLocalStoreTransaction.js"));
+  assert.ok(indexOfScript("documentCandidateProtocol.js") < indexOfScript("literatureDiscovery.js"));
+  assert.ok(indexOfScript("literatureDiscovery.js") < indexOfScript("researchPanelOrchestrator.js"));
+});
+
 test(
   "built XPI includes extracted runtime modules before paper summary",
   { skip: fs.existsSync(packagedXpiPath) ? false : "Run npm run package to create the XPI artifact" },
@@ -86,6 +104,9 @@ test(
     assert.match(listing, /chrome\/content\/workbenchSelectedPaper\.js/);
     assert.match(listing, /chrome\/content\/workbenchFetchRuntime\.js/);
     assert.match(listing, /chrome\/content\/workbenchLocalStoreTransaction\.js/);
+    assert.match(listing, /chrome\/content\/researchTopic\.js/);
+    assert.match(listing, /chrome\/content\/documentCandidateProtocol\.js/);
+    assert.match(listing, /chrome\/content\/literatureDiscovery\.js/);
     assert.match(listing, /chrome\/content\/graphReviewWorkflow\.js/);
     assert.match(listing, /chrome\/content\/researchPanelOrchestrator\.js/);
     assert.match(listing, /chrome\/content\/providerRequestPolicy\.js/);
@@ -104,6 +125,9 @@ test(
     assert.ok(panel.indexOf("workbenchFileIo.js") < panel.indexOf("paperSummary.js"));
     assert.ok(panel.indexOf("workbenchSelectedPaper.js") < panel.indexOf("paperSummary.js"));
     assert.ok(panel.indexOf("workbenchFetchRuntime.js") < panel.indexOf("paperSummary.js"));
+    assert.ok(panel.indexOf("researchTopic.js") < panel.indexOf("workbenchLocalStoreTransaction.js"));
+    assert.ok(panel.indexOf("documentCandidateProtocol.js") < panel.indexOf("literatureDiscovery.js"));
+    assert.ok(panel.indexOf("literatureDiscovery.js") < panel.indexOf("researchPanelOrchestrator.js"));
     assert.ok(panel.indexOf("workbenchLocalStoreTransaction.js") < panel.indexOf("paperSummary.js"));
     assert.ok(panel.indexOf("workbenchLocalStoreTransaction.js") < panel.indexOf("graphReviewWorkflow.js"));
     assert.ok(panel.indexOf("graphReviewWorkflow.js") < panel.indexOf("paperSummary.js"));

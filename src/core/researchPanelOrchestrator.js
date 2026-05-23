@@ -4,11 +4,13 @@
     const graphReviewWorkflowModule = resolveGraphReviewWorkflowModule(dependencies.graphReviewWorkflowModule);
     const transactionModule = resolveTransactionModule(dependencies.transactionModule);
     const aiTaskWorkspaceModule = resolveAiTaskWorkspaceModule(dependencies.aiTaskWorkspaceModule);
+    const literatureDiscoveryModule = resolveLiteratureDiscoveryModule(dependencies.literatureDiscoveryModule);
 
     assertPaperSummaryModule(paperSummaryModule);
     assertGraphReviewWorkflowModule(graphReviewWorkflowModule);
     assertTransactionModule(transactionModule);
     assertAiTaskWorkspaceModule(aiTaskWorkspaceModule);
+    assertLiteratureDiscoveryModule(literatureDiscoveryModule);
 
     function createSummaryDraftWorkflow({
       snapshot,
@@ -218,7 +220,35 @@
       };
     }
 
-    function createPanelRecords(snapshot, { selectedWorkId, filters } = {}) {
+    function createLiteratureDiscoveryPlanWorkflow({
+      snapshot,
+      topicId,
+      requestText,
+      launchSurface,
+      sourceScopes,
+      sources,
+      maxCandidates,
+      createdAt
+    } = {}) {
+      const plan = literatureDiscoveryModule.createLiteratureDiscoveryJobPlan({
+        topicId,
+        requestText,
+        launchSurface,
+        sourceScopes,
+        sources,
+        maxCandidates,
+        createdAt
+      });
+      const result = transactionModule.createLiteratureDiscoveryPlanTransaction({ snapshot, plan, createdAt });
+      return {
+        status: "literatureDiscoveryPlanCreated",
+        plan,
+        snapshot: result.snapshot,
+        records: createPanelRecords(result.snapshot, { topicId })
+      };
+    }
+
+    function createPanelRecords(snapshot, { selectedWorkId, filters, topicId } = {}) {
       return {
         recentDrafts: paperSummaryModule.listRecentSummaryDrafts(snapshot),
         recentGraphSeeds: paperSummaryModule.listRecentGraphSeeds(snapshot),
@@ -228,7 +258,8 @@
           selectedWorkId,
           filters
         }),
-        aiTaskWorkspace: aiTaskWorkspaceModule.createAiTaskWorkspaceReadModel(snapshot)
+        aiTaskWorkspace: aiTaskWorkspaceModule.createAiTaskWorkspaceReadModel(snapshot),
+        literatureDiscovery: literatureDiscoveryModule.createLiteratureDiscoveryReadModel(snapshot, { topicId })
       };
     }
 
@@ -237,6 +268,7 @@
       confirmAiTaskWorkspacePlanWorkflow,
       confirmDraftSavedToZoteroWorkflow,
       createAiTaskWorkspacePlanWorkflow,
+      createLiteratureDiscoveryPlanWorkflow,
       createPanelRecords,
       createReadingTranslationDraftWorkflow,
       createSummaryDraftWorkflow,
@@ -296,6 +328,19 @@
     return null;
   }
 
+  function resolveLiteratureDiscoveryModule(moduleOverride) {
+    if (moduleOverride) {
+      return moduleOverride;
+    }
+    if (typeof require === "function") {
+      return require("./literatureDiscovery");
+    }
+    if (typeof window !== "undefined") {
+      return window.WorkbenchLiteratureDiscovery;
+    }
+    return null;
+  }
+
   function assertPaperSummaryModule(moduleValue) {
     assertFunction(moduleValue, "buildZoteroNoteHtml", "WorkbenchPaperSummary core Module");
     assertFunction(moduleValue, "createReadingTranslationDraftInput", "WorkbenchPaperSummary core Module");
@@ -316,14 +361,21 @@
     assertFunction(moduleValue, "confirmAiJobPlanTransaction", "WorkbenchLocalStoreTransaction Module");
     assertFunction(moduleValue, "confirmResearchNoteDraftSavedToZoteroTransaction", "WorkbenchLocalStoreTransaction Module");
     assertFunction(moduleValue, "createAiJobPlanTransaction", "WorkbenchLocalStoreTransaction Module");
+    assertFunction(moduleValue, "createLiteratureDiscoveryPlanTransaction", "WorkbenchLocalStoreTransaction Module");
     assertFunction(moduleValue, "createResearchNoteDraftTransaction", "WorkbenchLocalStoreTransaction Module");
     assertFunction(moduleValue, "recordAiTaskQueueResultTransaction", "WorkbenchLocalStoreTransaction Module");
     assertFunction(moduleValue, "recordAiTaskQueueResultWithDraftsTransaction", "WorkbenchLocalStoreTransaction Module");
+    assertFunction(moduleValue, "recordLiteratureDiscoveryCandidatesTransaction", "WorkbenchLocalStoreTransaction Module");
   }
 
   function assertAiTaskWorkspaceModule(moduleValue) {
     assertFunction(moduleValue, "createAiTaskWorkspaceReadModel", "WorkbenchAiTaskWorkspace Module");
     assertFunction(moduleValue, "createCurrentSelectionAiJobPlan", "WorkbenchAiTaskWorkspace Module");
+  }
+
+  function assertLiteratureDiscoveryModule(moduleValue) {
+    assertFunction(moduleValue, "createLiteratureDiscoveryJobPlan", "WorkbenchLiteratureDiscovery Module");
+    assertFunction(moduleValue, "createLiteratureDiscoveryReadModel", "WorkbenchLiteratureDiscovery Module");
   }
 
   function assertFunction(moduleValue, functionName, moduleName) {
