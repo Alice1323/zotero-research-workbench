@@ -10,14 +10,14 @@ Binary and export payloads are intentionally ignored by Git. This README is the 
 | --- | --- |
 | Repository remote | `git@github.com:Alice1323/zotero-research-workbench.git` |
 | Source package | `zotero-research-workbench` |
-| Source `package.json` version | `0.3.0` |
+| Source `package.json` version | `0.4.0` |
 | Source `manifest.json` name | `Zotero 研究工作台` |
-| Source `manifest.json` version | `0.3.0` |
+| Source `manifest.json` version | `0.4.0` |
 | Add-on id | `zotero-research-workbench@local` |
 | Zotero compatibility | `8.0` to `9.*` |
 | Build command | `npm run package` |
 | Build staging directory | `dist/package/` |
-| Fresh build output | `dist/zotero-research-workbench-0.3.0.xpi` |
+| Fresh build output | `dist/zotero-research-workbench-0.4.0.xpi` |
 
 ## Enterprise Classification
 
@@ -54,7 +54,8 @@ These are the normal install/rollback candidates.
 
 | Version | Path | Original filename | Size | Last write time | Entries | SHA256 | Notes |
 | --- | --- | --- | ---: | --- | ---: | --- | --- |
-| `0.3.0` | `zotero-research-workbench-0.3.0.xpi` | `zotero-research-workbench-0.3.0.xpi` | `77710` | `2026-05-23 19:50:31` | `27` | `8FE7710024F732731761925A7CE377F36F2EE64CCE58D3A1A15FD81C768566A2` | Current v0.3 release package. |
+| `0.4.0` | `zotero-research-workbench-0.4.0.xpi` | `zotero-research-workbench-0.4.0.xpi` | `106501` | `2026-05-24 00:44:02` | `35` | `994C85328BB4ACDB7BEE7B571902807C11BA93BAE7F07EC2E73A05A28DC8D7F0` | Current v0.4 release package. |
+| `0.3.0` | `zotero-research-workbench-0.3.0.xpi` | `zotero-research-workbench-0.3.0.xpi` | `106500` | `2026-05-24 00:22:49` | `35` | `CE4CF14294B125CDE9C9FEE6395BE194754D12DA75E7043E019B127B313B1CBB` | Preserved v0.3 rollback package after the v0.4 bump. |
 | `0.1.0` | `releases/stable/0.1.0/zotero-research-workbench-0.1.0.xpi` | `zotero-research-workbench-0.1.0.xpi` | `47702` | `2026-05-21 04:36:32` | `19` | `4B5254BDA5C96B9C7716B28D2CB9E718EDDD1E48F59B099E632FF1094A678E9A` | Early stable build. |
 | `0.2.0` | `releases/stable/0.2.0/zotero-research-workbench-0.2.0.xpi` | `zotero-research-workbench-V0.21.xpi` | `59712` | `2026-05-21 22:20:19` | `24` | `AC0020630979D1E5F88C6B95D053E7AE88DEC34FA06C7FE88CC19DCE032F5F34` | Renamed to the GitHub build-script pattern. Original filename said `V0.21`, but package manifest says `0.2.0`. |
 

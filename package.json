@@ -1,6 +1,6 @@
 {
   "name": "zotero-research-workbench",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Zotero 8/9 research workflow plugin scaffold.",
   "private": true,
   "type": "commonjs",
