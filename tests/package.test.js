@@ -42,6 +42,16 @@ test("build script exists and documents the runtime package boundary", () => {
   assert.match(script, /documentCandidateProtocol\.js/);
   assert.match(script, /src\/core\/literatureDiscovery\.js/);
   assert.match(script, /literatureDiscovery\.js/);
+  assert.match(script, /src\/core\/literatureSourceAdapters\.js/);
+  assert.match(script, /literatureSourceAdapters\.js/);
+  assert.match(script, /src\/core\/documentCandidateReview\.js/);
+  assert.match(script, /documentCandidateReview\.js/);
+  assert.match(script, /src\/core\/zoteroWriteQueue\.js/);
+  assert.match(script, /zoteroWriteQueue\.js/);
+  assert.match(script, /src\/core\/zoteroItemWriter\.js/);
+  assert.match(script, /zoteroItemWriter\.js/);
+  assert.match(script, /src\/core\/etherealReferenceGraph\.js/);
+  assert.match(script, /etherealReferenceGraph\.js/);
   assert.match(script, /src\/core\/workbenchLocalStoreTransaction\.js/);
   assert.match(script, /workbenchLocalStoreTransaction\.js/);
   assert.match(script, /src\/core\/graphReviewWorkflow\.js/);
@@ -86,9 +96,20 @@ test("research panel loads v0.4 core modules before dependent runtime modules", 
   assert.ok(indexOfScript("researchTopic.js") >= 0);
   assert.ok(indexOfScript("documentCandidateProtocol.js") >= 0);
   assert.ok(indexOfScript("literatureDiscovery.js") >= 0);
+  assert.ok(indexOfScript("literatureSourceAdapters.js") >= 0);
+  assert.ok(indexOfScript("documentCandidateReview.js") >= 0);
+  assert.ok(indexOfScript("zoteroWriteQueue.js") >= 0);
+  assert.ok(indexOfScript("zoteroItemWriter.js") >= 0);
+  assert.ok(indexOfScript("etherealReferenceGraph.js") >= 0);
   assert.ok(indexOfScript("researchTopic.js") < indexOfScript("workbenchLocalStoreTransaction.js"));
   assert.ok(indexOfScript("documentCandidateProtocol.js") < indexOfScript("literatureDiscovery.js"));
+  assert.ok(indexOfScript("documentCandidateProtocol.js") < indexOfScript("literatureSourceAdapters.js"));
   assert.ok(indexOfScript("literatureDiscovery.js") < indexOfScript("researchPanelOrchestrator.js"));
+  assert.ok(indexOfScript("literatureSourceAdapters.js") < indexOfScript("paperSummary.js"));
+  assert.ok(indexOfScript("documentCandidateReview.js") < indexOfScript("researchPanelOrchestrator.js"));
+  assert.ok(indexOfScript("zoteroWriteQueue.js") < indexOfScript("researchPanelOrchestrator.js"));
+  assert.ok(indexOfScript("zoteroItemWriter.js") < indexOfScript("paperSummary.js"));
+  assert.ok(indexOfScript("etherealReferenceGraph.js") < indexOfScript("researchPanelOrchestrator.js"));
 });
 
 test(
@@ -107,6 +128,11 @@ test(
     assert.match(listing, /chrome\/content\/researchTopic\.js/);
     assert.match(listing, /chrome\/content\/documentCandidateProtocol\.js/);
     assert.match(listing, /chrome\/content\/literatureDiscovery\.js/);
+    assert.match(listing, /chrome\/content\/literatureSourceAdapters\.js/);
+    assert.match(listing, /chrome\/content\/documentCandidateReview\.js/);
+    assert.match(listing, /chrome\/content\/zoteroWriteQueue\.js/);
+    assert.match(listing, /chrome\/content\/zoteroItemWriter\.js/);
+    assert.match(listing, /chrome\/content\/etherealReferenceGraph\.js/);
     assert.match(listing, /chrome\/content\/graphReviewWorkflow\.js/);
     assert.match(listing, /chrome\/content\/researchPanelOrchestrator\.js/);
     assert.match(listing, /chrome\/content\/providerRequestPolicy\.js/);
@@ -127,7 +153,13 @@ test(
     assert.ok(panel.indexOf("workbenchFetchRuntime.js") < panel.indexOf("paperSummary.js"));
     assert.ok(panel.indexOf("researchTopic.js") < panel.indexOf("workbenchLocalStoreTransaction.js"));
     assert.ok(panel.indexOf("documentCandidateProtocol.js") < panel.indexOf("literatureDiscovery.js"));
+    assert.ok(panel.indexOf("documentCandidateProtocol.js") < panel.indexOf("literatureSourceAdapters.js"));
     assert.ok(panel.indexOf("literatureDiscovery.js") < panel.indexOf("researchPanelOrchestrator.js"));
+    assert.ok(panel.indexOf("literatureSourceAdapters.js") < panel.indexOf("paperSummary.js"));
+    assert.ok(panel.indexOf("documentCandidateReview.js") < panel.indexOf("researchPanelOrchestrator.js"));
+    assert.ok(panel.indexOf("zoteroWriteQueue.js") < panel.indexOf("researchPanelOrchestrator.js"));
+    assert.ok(panel.indexOf("zoteroItemWriter.js") < panel.indexOf("paperSummary.js"));
+    assert.ok(panel.indexOf("etherealReferenceGraph.js") < panel.indexOf("researchPanelOrchestrator.js"));
     assert.ok(panel.indexOf("workbenchLocalStoreTransaction.js") < panel.indexOf("paperSummary.js"));
     assert.ok(panel.indexOf("workbenchLocalStoreTransaction.js") < panel.indexOf("graphReviewWorkflow.js"));
     assert.ok(panel.indexOf("graphReviewWorkflow.js") < panel.indexOf("paperSummary.js"));

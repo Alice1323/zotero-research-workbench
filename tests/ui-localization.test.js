@@ -316,6 +316,31 @@ test("research panel runtime wires selected paper PDF attachment status", () => 
   assert.doesNotMatch(runtime, /Zotero\?\.Items\?\.get/);
 });
 
+test("research panel loads v0.4 literature discovery runtime modules", () => {
+  const panel = fs.readFileSync(path.join(root, "chrome/content/researchPanel.xhtml"), "utf8");
+
+  for (const scriptName of [
+    "researchTopic.js",
+    "documentCandidateProtocol.js",
+    "literatureDiscovery.js",
+    "literatureSourceAdapters.js",
+    "documentCandidateReview.js",
+    "zoteroWriteQueue.js",
+    "zoteroItemWriter.js",
+    "etherealReferenceGraph.js"
+  ]) {
+    assert.match(panel, new RegExp(`src="${scriptName}"`));
+  }
+
+  assert.ok(panel.indexOf("documentCandidateProtocol.js") < panel.indexOf("literatureDiscovery.js"));
+  assert.ok(panel.indexOf("documentCandidateProtocol.js") < panel.indexOf("literatureSourceAdapters.js"));
+  assert.ok(panel.indexOf("researchTopic.js") < panel.indexOf("workbenchLocalStoreTransaction.js"));
+  assert.ok(panel.indexOf("documentCandidateReview.js") < panel.indexOf("researchPanelOrchestrator.js"));
+  assert.ok(panel.indexOf("zoteroWriteQueue.js") < panel.indexOf("researchPanelOrchestrator.js"));
+  assert.ok(panel.indexOf("zoteroItemWriter.js") < panel.indexOf("paperSummary.js"));
+  assert.ok(panel.indexOf("etherealReferenceGraph.js") < panel.indexOf("researchPanelOrchestrator.js"));
+});
+
 test("research panel runtime wires provider request guards", () => {
   const panel = fs.readFileSync(path.join(root, "chrome/content/researchPanel.xhtml"), "utf8");
   const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
