@@ -5,12 +5,14 @@
     const transactionModule = resolveTransactionModule(dependencies.transactionModule);
     const aiTaskWorkspaceModule = resolveAiTaskWorkspaceModule(dependencies.aiTaskWorkspaceModule);
     const literatureDiscoveryModule = resolveLiteratureDiscoveryModule(dependencies.literatureDiscoveryModule);
+    const candidateReviewModule = resolveCandidateReviewModule(dependencies.candidateReviewModule);
 
     assertPaperSummaryModule(paperSummaryModule);
     assertGraphReviewWorkflowModule(graphReviewWorkflowModule);
     assertTransactionModule(transactionModule);
     assertAiTaskWorkspaceModule(aiTaskWorkspaceModule);
     assertLiteratureDiscoveryModule(literatureDiscoveryModule);
+    assertCandidateReviewModule(candidateReviewModule);
 
     function createSummaryDraftWorkflow({
       snapshot,
@@ -248,6 +250,52 @@
       };
     }
 
+    function markDocumentCandidateReviewedWorkflow({
+      snapshot,
+      topicId,
+      candidateId,
+      reviewDecision,
+      reviewNote,
+      reviewedAt
+    } = {}) {
+      const result = transactionModule.markDocumentCandidateReviewedTransaction({
+        snapshot,
+        candidateId,
+        reviewDecision,
+        reviewNote,
+        reviewedAt
+      });
+      return {
+        status: "documentCandidateReviewed",
+        candidateId,
+        snapshot: result.snapshot,
+        records: createPanelRecords(result.snapshot, { topicId })
+      };
+    }
+
+    function createZoteroImportPlanWorkflow({
+      snapshot,
+      topicId,
+      selections,
+      targetCollectionKey,
+      createdAt
+    } = {}) {
+      const importPlan = candidateReviewModule.createZoteroImportPlanFromCandidates({
+        topicId,
+        candidates: Array.isArray(snapshot?.documentCandidates) ? snapshot.documentCandidates : [],
+        selections,
+        targetCollectionKey,
+        createdAt
+      });
+      const result = transactionModule.createZoteroImportPlanTransaction({ snapshot, importPlan, createdAt });
+      return {
+        status: "zoteroImportPlanCreated",
+        importPlan,
+        snapshot: result.snapshot,
+        records: createPanelRecords(result.snapshot, { topicId })
+      };
+    }
+
     function createPanelRecords(snapshot, { selectedWorkId, filters, topicId } = {}) {
       return {
         recentDrafts: paperSummaryModule.listRecentSummaryDrafts(snapshot),
@@ -259,7 +307,8 @@
           filters
         }),
         aiTaskWorkspace: aiTaskWorkspaceModule.createAiTaskWorkspaceReadModel(snapshot),
-        literatureDiscovery: literatureDiscoveryModule.createLiteratureDiscoveryReadModel(snapshot, { topicId })
+        literatureDiscovery: literatureDiscoveryModule.createLiteratureDiscoveryReadModel(snapshot, { topicId }),
+        candidateReview: candidateReviewModule.createCandidateReviewReadModel(snapshot, { topicId })
       };
     }
 
@@ -272,6 +321,8 @@
       createPanelRecords,
       createReadingTranslationDraftWorkflow,
       createSummaryDraftWorkflow,
+      createZoteroImportPlanWorkflow,
+      markDocumentCandidateReviewedWorkflow,
       prepareZoteroNoteWrite,
       promoteGraphSeedWorkflow,
       recordAiTaskWorkspaceQueueResultWorkflow,
@@ -341,6 +392,19 @@
     return null;
   }
 
+  function resolveCandidateReviewModule(moduleOverride) {
+    if (moduleOverride) {
+      return moduleOverride;
+    }
+    if (typeof require === "function") {
+      return require("./documentCandidateReview");
+    }
+    if (typeof window !== "undefined") {
+      return window.WorkbenchDocumentCandidateReview;
+    }
+    return null;
+  }
+
   function assertPaperSummaryModule(moduleValue) {
     assertFunction(moduleValue, "buildZoteroNoteHtml", "WorkbenchPaperSummary core Module");
     assertFunction(moduleValue, "createReadingTranslationDraftInput", "WorkbenchPaperSummary core Module");
@@ -363,6 +427,8 @@
     assertFunction(moduleValue, "createAiJobPlanTransaction", "WorkbenchLocalStoreTransaction Module");
     assertFunction(moduleValue, "createLiteratureDiscoveryPlanTransaction", "WorkbenchLocalStoreTransaction Module");
     assertFunction(moduleValue, "createResearchNoteDraftTransaction", "WorkbenchLocalStoreTransaction Module");
+    assertFunction(moduleValue, "createZoteroImportPlanTransaction", "WorkbenchLocalStoreTransaction Module");
+    assertFunction(moduleValue, "markDocumentCandidateReviewedTransaction", "WorkbenchLocalStoreTransaction Module");
     assertFunction(moduleValue, "recordAiTaskQueueResultTransaction", "WorkbenchLocalStoreTransaction Module");
     assertFunction(moduleValue, "recordAiTaskQueueResultWithDraftsTransaction", "WorkbenchLocalStoreTransaction Module");
     assertFunction(moduleValue, "recordLiteratureDiscoveryCandidatesTransaction", "WorkbenchLocalStoreTransaction Module");
@@ -376,6 +442,11 @@
   function assertLiteratureDiscoveryModule(moduleValue) {
     assertFunction(moduleValue, "createLiteratureDiscoveryJobPlan", "WorkbenchLiteratureDiscovery Module");
     assertFunction(moduleValue, "createLiteratureDiscoveryReadModel", "WorkbenchLiteratureDiscovery Module");
+  }
+
+  function assertCandidateReviewModule(moduleValue) {
+    assertFunction(moduleValue, "createCandidateReviewReadModel", "WorkbenchDocumentCandidateReview Module");
+    assertFunction(moduleValue, "createZoteroImportPlanFromCandidates", "WorkbenchDocumentCandidateReview Module");
   }
 
   function assertFunction(moduleValue, functionName, moduleName) {

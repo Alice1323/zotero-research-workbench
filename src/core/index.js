@@ -11,6 +11,7 @@ const WorkbenchGraphReviewWorkflow = require("./graphReviewWorkflow");
 const WorkbenchResearchPanelOrchestrator = require("./researchPanelOrchestrator");
 const WorkbenchResearchTopic = require("./researchTopic");
 const WorkbenchDocumentCandidateProtocol = require("./documentCandidateProtocol");
+const WorkbenchDocumentCandidateReview = require("./documentCandidateReview");
 const WorkbenchLiteratureDiscovery = require("./literatureDiscovery");
 const WorkbenchLiteratureSourceAdapters = require("./literatureSourceAdapters");
 const WorkbenchProviderRequestPolicy = require("./providerRequestPolicy");
@@ -559,6 +560,7 @@ module.exports = {
   WorkbenchResearchPanelOrchestrator,
   WorkbenchResearchTopic,
   WorkbenchDocumentCandidateProtocol,
+  WorkbenchDocumentCandidateReview,
   WorkbenchLiteratureDiscovery,
   WorkbenchLiteratureSourceAdapters,
   WorkbenchLocalStore,

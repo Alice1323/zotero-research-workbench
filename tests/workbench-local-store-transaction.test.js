@@ -6,7 +6,9 @@ const {
   confirmAiJobPlanTransaction,
   confirmResearchNoteDraftSavedToZoteroTransaction,
   createAiJobPlanTransaction,
+  createZoteroImportPlanTransaction,
   createResearchNoteDraftTransaction,
+  markDocumentCandidateReviewedTransaction,
   markRunningAiJobsForManualResumeTransaction,
   removePromptOverrideTransaction,
   promoteGraphSeedTransaction,
@@ -350,4 +352,48 @@ test("markRunningAiJobsForManualResumeTransaction pauses interrupted jobs withou
   assert.equal(result.snapshot.aiJobs[0].resumeRequired, true);
   assert.equal(result.snapshot.aiTasks[0].state, "queued");
   assert.equal(result.snapshot.aiJobs[1].state, "completed");
+});
+
+test("markDocumentCandidateReviewedTransaction updates candidate review state and task ledger", () => {
+  const result = markDocumentCandidateReviewedTransaction({
+    snapshot: {
+      schemaVersion: 1,
+      exportedAt: "old",
+      documentCandidates: [{ id: "candidate-a", reviewState: "needs-review" }],
+      taskLedger: []
+    },
+    candidateId: "candidate-a",
+    reviewDecision: "confirmed",
+    reviewNote: "人工确认可导入",
+    reviewedAt: "2026-05-23T12:00:00.000Z"
+  });
+
+  assert.equal(result.status, "document-candidate-reviewed");
+  assert.equal(result.snapshot.documentCandidates[0].reviewState, "confirmed");
+  assert.equal(result.snapshot.documentCandidates[0].reviewedBy, "user");
+  assert.equal(result.snapshot.taskLedger.at(-1).workflowStep, "review-document-candidate");
+});
+
+test("createZoteroImportPlanTransaction stores plan and links it to the topic", () => {
+  const result = createZoteroImportPlanTransaction({
+    snapshot: {
+      schemaVersion: 1,
+      exportedAt: "old",
+      researchTopics: [{ id: "topic-a", title: "Topic", linkedImportPlanIds: [] }],
+      zoteroImportPlans: [],
+      taskLedger: []
+    },
+    importPlan: {
+      id: "zotero-import-plan-a",
+      topicId: "topic-a",
+      candidateIds: ["candidate-a"],
+      writeIntents: [{ id: "write-intent-candidate-a-item" }]
+    },
+    createdAt: "2026-05-23T12:05:00.000Z"
+  });
+
+  assert.equal(result.status, "zotero-import-plan-created");
+  assert.equal(result.snapshot.zoteroImportPlans[0].id, "zotero-import-plan-a");
+  assert.deepEqual(result.snapshot.researchTopics[0].linkedImportPlanIds, ["zotero-import-plan-a"]);
+  assert.equal(result.snapshot.taskLedger.at(-1).workflowStep, "create-zotero-import-plan");
 });

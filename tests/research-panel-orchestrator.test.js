@@ -327,6 +327,8 @@ test("literature discovery workflow creates a draft plan and read model", () => 
         }
       }),
       createResearchNoteDraftTransaction() {},
+      createZoteroImportPlanTransaction() {},
+      markDocumentCandidateReviewedTransaction() {},
       recordAiTaskQueueResultTransaction() {},
       recordAiTaskQueueResultWithDraftsTransaction() {},
       recordLiteratureDiscoveryCandidatesTransaction() {}
@@ -345,6 +347,80 @@ test("literature discovery workflow creates a draft plan and read model", () => 
   assert.equal(result.records.literatureDiscovery.jobs[0].id, "job-a");
 });
 
+test("candidate review workflows update review state and create import plans", () => {
+  const orchestrator = createResearchPanelOrchestrator({
+    candidateReviewModule: {
+      createCandidateReviewReadModel: (snapshot, { topicId }) => ({
+        candidates: (snapshot.documentCandidates || []).filter((candidate) => candidate.topicId === topicId),
+        summary: { totalCount: (snapshot.documentCandidates || []).length }
+      }),
+      createZoteroImportPlanFromCandidates: ({ topicId, selections, createdAt }) => ({
+        id: "zotero-import-plan-a",
+        topicId,
+        candidateIds: selections.map((selection) => selection.candidateId),
+        writeIntents: [{ id: "write-intent-candidate-a-item", kind: "create-item" }],
+        createdAt
+      }),
+      markCandidateReviewed: ({ snapshot, candidateId, reviewDecision }) => ({
+        status: "document-candidate-reviewed",
+        snapshot: {
+          ...snapshot,
+          documentCandidates: (snapshot.documentCandidates || []).map((candidate) =>
+            candidate.id === candidateId ? { ...candidate, reviewState: reviewDecision } : candidate
+          )
+        }
+      })
+    },
+    transactionModule: {
+      confirmAiJobPlanTransaction() {},
+      confirmResearchNoteDraftSavedToZoteroTransaction() {},
+      createAiJobPlanTransaction() {},
+      createLiteratureDiscoveryPlanTransaction() {},
+      createResearchNoteDraftTransaction() {},
+      createZoteroImportPlanTransaction: ({ snapshot, importPlan }) => ({
+        status: "zotero-import-plan-created",
+        snapshot: {
+          ...snapshot,
+          zoteroImportPlans: [importPlan]
+        }
+      }),
+      markDocumentCandidateReviewedTransaction: ({ snapshot, candidateId, reviewDecision }) => ({
+        status: "document-candidate-reviewed",
+        snapshot: {
+          ...snapshot,
+          documentCandidates: (snapshot.documentCandidates || []).map((candidate) =>
+            candidate.id === candidateId ? { ...candidate, reviewState: reviewDecision } : candidate
+          )
+        }
+      }),
+      recordAiTaskQueueResultTransaction() {},
+      recordAiTaskQueueResultWithDraftsTransaction() {},
+      recordLiteratureDiscoveryCandidatesTransaction() {}
+    }
+  });
+  const reviewed = orchestrator.markDocumentCandidateReviewedWorkflow({
+    snapshot: createSnapshot({
+      documentCandidates: [{ id: "candidate-a", topicId: "topic-a", reviewState: "needs-review" }]
+    }),
+    topicId: "topic-a",
+    candidateId: "candidate-a",
+    reviewDecision: "confirmed",
+    reviewedAt: "2026-05-23T12:00:00.000Z"
+  });
+  const planned = orchestrator.createZoteroImportPlanWorkflow({
+    snapshot: reviewed.snapshot,
+    topicId: "topic-a",
+    selections: [{ candidateId: "candidate-a", importMode: "zotero-item" }],
+    createdAt: "2026-05-23T12:05:00.000Z"
+  });
+
+  assert.equal(reviewed.status, "documentCandidateReviewed");
+  assert.equal(reviewed.records.candidateReview.candidates[0].reviewState, "confirmed");
+  assert.equal(planned.status, "zoteroImportPlanCreated");
+  assert.equal(planned.importPlan.id, "zotero-import-plan-a");
+  assert.equal(planned.records.candidateReview.candidates[0].id, "candidate-a");
+});
+
 test("research panel orchestrator browser script registers a factory without global collisions", () => {
   const context = {
     console,
@@ -357,6 +433,7 @@ test("research panel orchestrator browser script registers a factory without glo
     "providerRequestPolicy.js",
     "aiTaskWorkspace.js",
     "documentCandidateProtocol.js",
+    "documentCandidateReview.js",
     "literatureDiscovery.js",
     "workbenchLocalStoreTransaction.js",
     "graphSeed.js",

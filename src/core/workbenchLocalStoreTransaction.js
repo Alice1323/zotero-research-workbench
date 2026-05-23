@@ -439,6 +439,82 @@ function recordLiteratureDiscoveryCandidatesTransaction({ snapshot, jobId, topic
   return { status: "literature-discovery-candidates-recorded", jobId: normalizedJobId, candidateIds, snapshot: next };
 }
 
+function markDocumentCandidateReviewedTransaction({
+  snapshot,
+  candidateId,
+  reviewDecision,
+  reviewNote,
+  reviewedAt
+} = {}) {
+  const timestamp = cleanText(reviewedAt) || new Date().toISOString();
+  const normalizedCandidateId = cleanText(candidateId);
+  if (!normalizedCandidateId) {
+    throw new Error("候选文献 id 不能为空");
+  }
+  const next = normalizeTransactionSnapshot(snapshot);
+  const candidate = next.documentCandidates.find((entry) => cleanText(entry?.id) === normalizedCandidateId);
+  if (!candidate) {
+    throw new Error("未找到候选文献");
+  }
+
+  candidate.reviewState = normalizeCandidateReviewDecision(reviewDecision);
+  candidate.reviewedAt = timestamp;
+  candidate.reviewedBy = "user";
+  candidate.reviewNote = cleanText(reviewNote);
+  next.taskLedger.push({
+    id: `task-${normalizedCandidateId}-review-document-candidate-${createStableTimestamp(timestamp)}`,
+    workflowStep: "review-document-candidate",
+    state: "completed",
+    providerId: null,
+    promptTaskTemplateId: null,
+    outputLocation: { candidateId: normalizedCandidateId, reviewState: candidate.reviewState },
+    errorNotice: null,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    provenance: { source: "explicit-user-action", writeTarget: "local-snapshot-only" }
+  });
+  next.exportedAt = timestamp;
+  return {
+    status: "document-candidate-reviewed",
+    candidateId: normalizedCandidateId,
+    reviewState: candidate.reviewState,
+    snapshot: next
+  };
+}
+
+function createZoteroImportPlanTransaction({ snapshot, importPlan, createdAt } = {}) {
+  const timestamp = cleanText(createdAt) || cleanText(importPlan?.createdAt) || new Date().toISOString();
+  const plan = clonePlain(importPlan);
+  if (!cleanText(plan.id)) {
+    throw new Error("导入计划 id 不能为空");
+  }
+  const next = normalizeTransactionSnapshot(snapshot);
+  upsertRecordById(next.zoteroImportPlans, plan);
+  linkTopicInPlace(next, {
+    topicId: cleanText(plan.topicId),
+    importPlanIds: [plan.id],
+    updatedAt: timestamp
+  });
+  next.taskLedger.push({
+    id: `task-${plan.id}-create-zotero-import-plan`,
+    workflowStep: "create-zotero-import-plan",
+    state: "completed",
+    providerId: null,
+    promptTaskTemplateId: null,
+    outputLocation: {
+      importPlanId: plan.id,
+      topicId: cleanText(plan.topicId),
+      candidateIds: Array.isArray(plan.candidateIds) ? plan.candidateIds : []
+    },
+    errorNotice: null,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    provenance: { source: "explicit-user-action", writeTarget: "local-snapshot-only" }
+  });
+  next.exportedAt = timestamp;
+  return { status: "zotero-import-plan-created", importPlanId: plan.id, snapshot: next };
+}
+
 function recordAiTaskQueueResultWithDraftsTransaction({ snapshot, queueResult, recordedAt } = {}) {
   const timestamp = cleanText(recordedAt) || new Date().toISOString();
   const recorded = recordAiTaskQueueResultTransaction({ snapshot, queueResult, recordedAt: timestamp });
@@ -595,6 +671,7 @@ function normalizeTransactionSnapshot(snapshot) {
     documentCandidates: Array.isArray(input.documentCandidates) ? input.documentCandidates : [],
     literatureDiscoveryJobs: Array.isArray(input.literatureDiscoveryJobs) ? input.literatureDiscoveryJobs : [],
     literatureDiscoveryFailures: Array.isArray(input.literatureDiscoveryFailures) ? input.literatureDiscoveryFailures : [],
+    zoteroImportPlans: Array.isArray(input.zoteroImportPlans) ? input.zoteroImportPlans : [],
     aiJobs: Array.isArray(input.aiJobs) ? input.aiJobs : [],
     aiTasks: Array.isArray(input.aiTasks) ? input.aiTasks : [],
     aiTaskResults: Array.isArray(input.aiTaskResults) ? input.aiTaskResults : [],
@@ -613,6 +690,7 @@ function linkTopicInPlace(snapshot, links) {
     topicId: links.topicId,
     candidateIds: links.candidateIds,
     aiJobIds: links.aiJobIds,
+    importPlanIds: links.importPlanIds,
     updatedAt: links.updatedAt
   });
   snapshot.researchTopics = result.snapshot.researchTopics;
@@ -664,6 +742,14 @@ function normalizeReviewState(value) {
   return ["pending", "confirmed", "rejected"].includes(text) ? text : "pending";
 }
 
+function normalizeCandidateReviewDecision(value) {
+  const text = cleanText(value);
+  if (["confirmed", "rejected", "needs-review"].includes(text)) {
+    return text;
+  }
+  throw new Error("不支持的候选文献复核决定");
+}
+
 function createStableTimestamp(value) {
   return value.replace(/[^0-9A-Za-z]+/g, "-").replace(/-$/, "");
 }
@@ -696,6 +782,8 @@ const WorkbenchLocalStoreTransaction = {
   createAiJobPlanTransaction,
   createLiteratureDiscoveryPlanTransaction,
   createResearchNoteDraftTransaction,
+  createZoteroImportPlanTransaction,
+  markDocumentCandidateReviewedTransaction,
   markRunningAiJobsForManualResumeTransaction,
   removePromptOverrideTransaction,
   promoteGraphSeedTransaction,
