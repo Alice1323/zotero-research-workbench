@@ -50,6 +50,18 @@ test("normalizeAttachmentReference applies importability gates by attachment kin
   assert.equal(normalizeAttachmentReference({ kind: "landing-page-url", url: "https://example.org/article" }).importable, false);
 });
 
+test("normalizeAttachmentReference accepts sci-hub as a user-configured resolver", () => {
+  const attachment = normalizeAttachmentReference({
+    kind: "sci-hub-resolved-url",
+    url: "https://sci-hub.se/10.1000/example.pdf",
+    provenance: { source: "sci-hub", requestUrl: "https://sci-hub.se/10.1000/example" }
+  });
+
+  assert.equal(attachment.importable, true);
+  assert.equal(attachment.provenance.source, "sci-hub");
+  assert.equal(attachment.kind, "sci-hub-resolved-url");
+});
+
 test("normalizeDocumentCandidate marks missing identity and unclear attachments", () => {
   const candidate = normalizeDocumentCandidate({
     sourceAdapterId: "connector-a",

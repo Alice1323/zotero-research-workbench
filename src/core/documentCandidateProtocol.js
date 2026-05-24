@@ -98,6 +98,9 @@ function normalizeAttachmentReference(input = {}) {
   } else if (kind === "open-access-pdf-url") {
     importable = isHttpUrl(url) && (isPdfUrl(url) || contentType === "application/pdf");
     if (!importable) importBlockReason = CANDIDATE_ANOMALY_TAGS.unclearAttachment;
+  } else if (kind === "sci-hub-resolved-url") {
+    importable = isHttpUrl(url) && cleanText(provenance.source) === "sci-hub";
+    if (!importable) importBlockReason = CANDIDATE_ANOMALY_TAGS.unclearAttachment;
   } else if (kind === "connector-file-reference") {
     importable = Boolean(cleanText(provenance.source) || cleanText(provenance.connectorId));
     if (!importable) importBlockReason = CANDIDATE_ANOMALY_TAGS.unclearAttachment;
