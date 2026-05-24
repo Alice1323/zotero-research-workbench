@@ -2,7 +2,8 @@
 const IMPORT_MODES = {
   workbenchOnly: "workbench-only",
   zoteroItem: "zotero-item",
-  zoteroItemPlusAttachment: "zotero-item-plus-attachment"
+  zoteroItemPlusAttachment: "zotero-item-plus-attachment",
+  attachmentOnly: "attachment-only"
 };
 
 const REVIEW_STATES = {
@@ -101,6 +102,7 @@ function markCandidateReviewed({ snapshot, candidateId, reviewDecision, reviewNo
 
 function createZoteroImportPlanFromCandidates({
   topicId,
+  snapshot,
   candidates,
   selections,
   targetCollectionKey,
@@ -108,8 +110,9 @@ function createZoteroImportPlanFromCandidates({
 } = {}) {
   const timestamp = cleanText(createdAt) || new Date().toISOString();
   const normalizedTopicId = cleanText(topicId);
+  const sourceCandidates = Array.isArray(candidates) ? candidates : snapshot?.documentCandidates;
   const candidatesById = new Map(
-    (Array.isArray(candidates) ? candidates : []).map((candidate) => [cleanText(candidate?.id), clonePlain(candidate)])
+    (Array.isArray(sourceCandidates) ? sourceCandidates : []).map((candidate) => [cleanText(candidate?.id), clonePlain(candidate)])
   );
   const writeIntents = [];
   const candidateIds = [];
@@ -125,6 +128,25 @@ function createZoteroImportPlanFromCandidates({
 
     const importMode = normalizeImportMode(selection?.importMode);
     if (importMode === IMPORT_MODES.workbenchOnly) {
+      continue;
+    }
+    if (importMode === IMPORT_MODES.attachmentOnly) {
+      const attachment = resolveSelectedAttachment(candidate, selection?.attachmentId);
+      const parentItemKey = cleanText(selection?.targetZoteroItemKey);
+      const parentItemId = Number(selection?.targetZoteroItemId) || null;
+      if (!parentItemKey && !parentItemId) {
+        throw new Error("仅补 PDF 需要目标 Zotero 条目");
+      }
+      if (attachment) {
+        writeIntents.push(createAttachmentWriteIntent({
+          candidate,
+          topicId: normalizedTopicId,
+          attachment,
+          dependsOn: [],
+          parentItemKey,
+          parentItemId
+        }));
+      }
       continue;
     }
 
@@ -186,15 +208,17 @@ function createItemWriteIntent({ candidate, topicId, targetCollectionKey, itemIn
   };
 }
 
-function createAttachmentWriteIntent({ candidate, topicId, attachment, itemIntentId }) {
+function createAttachmentWriteIntent({ candidate, topicId, attachment, itemIntentId, dependsOn, parentItemKey, parentItemId }) {
   const candidateId = cleanText(candidate?.id);
   return {
     id: `write-intent-${candidateId}-attachment`,
     kind: "create-attachment",
     candidateId,
     topicId: cleanText(topicId),
+    parentItemKey: cleanText(parentItemKey),
+    parentItemId: Number(parentItemId) || null,
     attachment: clonePlain(attachment),
-    dependsOn: [itemIntentId || `write-intent-${candidateId}-item`],
+    dependsOn: Array.isArray(dependsOn) ? uniqueClean(dependsOn) : [itemIntentId || `write-intent-${candidateId}-item`],
     provenance: { sourceCandidateId: candidateId, attachmentSource: cleanText(attachment?.kind) }
   };
 }

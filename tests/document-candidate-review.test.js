@@ -112,6 +112,44 @@ test("createZoteroImportPlanFromCandidates creates item and attachment write int
   assert.equal(plan.writeIntents[1].kind, "create-attachment");
 });
 
+test("createZoteroImportPlanFromCandidates supports item plus pdf and attachment-only modes", () => {
+  const snapshot = {
+    documentCandidates: [
+      {
+        id: "candidate-a",
+        topicId: "topic-a",
+        title: "Candidate A",
+        anomalyTags: [],
+        attachments: [{ id: "att-a", kind: "open-access-pdf-url", url: "https://example.org/a.pdf", importable: true }]
+      }
+    ]
+  };
+
+  const itemPlusPdf = createZoteroImportPlanFromCandidates({
+    snapshot,
+    topicId: "topic-a",
+    selections: [{ candidateId: "candidate-a", importMode: "zotero-item-plus-attachment", attachmentId: "att-a" }],
+    createdAt: "2026-05-25T02:00:00.000Z"
+  });
+  assert.deepEqual(itemPlusPdf.expectedWrites, { items: 1, attachments: 1 });
+
+  const attachmentOnly = createZoteroImportPlanFromCandidates({
+    snapshot,
+    topicId: "topic-a",
+    selections: [{
+      candidateId: "candidate-a",
+      importMode: "attachment-only",
+      attachmentId: "att-a",
+      targetZoteroItemKey: "ABCD1234",
+      targetZoteroItemId: 123
+    }],
+    createdAt: "2026-05-25T02:01:00.000Z"
+  });
+  assert.deepEqual(attachmentOnly.expectedWrites, { items: 0, attachments: 1 });
+  assert.equal(attachmentOnly.writeIntents[0].kind, "create-attachment");
+  assert.equal(attachmentOnly.writeIntents[0].parentItemKey, "ABCD1234");
+});
+
 test("createZoteroImportPlanFromCandidates maps candidates to Zotero item fields", () => {
   const plan = createZoteroImportPlanFromCandidates({
     topicId: "topic-a",
