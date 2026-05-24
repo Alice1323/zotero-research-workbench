@@ -23,6 +23,8 @@ const ResearchTopic =
       ? window.WorkbenchResearchTopic
       : null;
 
+const RAW_SOURCE_PAYLOAD_KEY_LIMIT = 25;
+
 function createResearchNoteDraftTransaction({ snapshot, draftInput, createdAt } = {}) {
   const timestamp = cleanText(createdAt) || new Date().toISOString();
   const draft = normalizeDraftInput(draftInput);
@@ -407,10 +409,10 @@ function recordLiteratureDiscoveryCandidatesTransaction({ snapshot, jobId, topic
   const candidateIds = [];
 
   for (const candidate of Array.isArray(candidates) ? candidates : []) {
-    const normalized = {
+    const normalized = compactDocumentCandidateForSnapshot({
       ...clonePlain(candidate),
       topicId: cleanText(candidate?.topicId) || normalizedTopicId
-    };
+    });
     if (!cleanText(normalized.id)) {
       continue;
     }
@@ -744,7 +746,7 @@ function normalizeTransactionSnapshot(snapshot) {
     citationRelations: Array.isArray(input.citationRelations) ? input.citationRelations : [],
     taskLedger: Array.isArray(input.taskLedger) ? input.taskLedger : [],
     researchTopics: Array.isArray(input.researchTopics) ? input.researchTopics : [],
-    documentCandidates: Array.isArray(input.documentCandidates) ? input.documentCandidates : [],
+    documentCandidates: Array.isArray(input.documentCandidates) ? input.documentCandidates.map(compactDocumentCandidateForSnapshot) : [],
     literatureDiscoveryJobs: Array.isArray(input.literatureDiscoveryJobs) ? input.literatureDiscoveryJobs : [],
     literatureDiscoveryFailures: Array.isArray(input.literatureDiscoveryFailures) ? input.literatureDiscoveryFailures : [],
     zoteroImportPlans: Array.isArray(input.zoteroImportPlans) ? input.zoteroImportPlans : [],
@@ -844,6 +846,103 @@ function upsertRecordById(records, record) {
   } else {
     records.push(record);
   }
+}
+
+function compactDocumentCandidateForSnapshot(candidate) {
+  const normalized = clonePlain(candidate);
+  normalized.rawSourcePayload = compactRawSourcePayload(normalized.rawSourcePayload);
+  return normalized;
+}
+
+function compactRawSourcePayload(rawSourcePayload) {
+  if (!rawSourcePayload || typeof rawSourcePayload !== "object" || Array.isArray(rawSourcePayload)) {
+    return {};
+  }
+
+  const compacted = {};
+  for (const [sourceAdapterId, payload] of Object.entries(rawSourcePayload)) {
+    compacted[sourceAdapterId] = summarizeRawSourcePayloadEntry(sourceAdapterId, payload);
+  }
+  return compacted;
+}
+
+function summarizeRawSourcePayloadEntry(sourceAdapterId, payload) {
+  const source = cleanText(sourceAdapterId) || "unknown-source";
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return {
+      sourceAdapterId: source,
+      payloadCompacted: true,
+      originalPayloadBytes: measureJsonLength(payload),
+      valueType: Array.isArray(payload) ? "array" : typeof payload
+    };
+  }
+
+  const keys = Object.keys(payload);
+  return removeEmptyFields({
+    sourceAdapterId: source,
+    sourceRecordId: pickRawPayloadRecordId(payload),
+    doi: cleanText(payload.doi || payload.DOI),
+    title: firstClean(payload.title || payload.display_name || payload.name),
+    year: cleanNumberishText(payload.publication_year || payload.year || firstIssuedYear(payload.issued)),
+    sourceUrl: cleanText(payload.url || payload.URL || payload.id),
+    payloadCompacted: true,
+    originalPayloadBytes: measureJsonLength(payload),
+    originalPayloadKeys: keys.slice(0, RAW_SOURCE_PAYLOAD_KEY_LIMIT),
+    originalPayloadKeyCount: keys.length
+  });
+}
+
+function pickRawPayloadRecordId(payload) {
+  return cleanText(
+    payload.id ||
+      payload.sourceRecordId ||
+      payload.DOI ||
+      payload.doi ||
+      payload.URL ||
+      payload.url ||
+      firstClean(payload.title || payload.display_name)
+  );
+}
+
+function firstIssuedYear(value) {
+  const firstPart = Array.isArray(value?.["date-parts"]) ? value["date-parts"][0] : null;
+  return Array.isArray(firstPart) ? firstPart[0] : "";
+}
+
+function firstClean(value) {
+  if (Array.isArray(value)) {
+    return cleanText(value[0]);
+  }
+  return cleanText(value);
+}
+
+function cleanNumberishText(value) {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  return cleanText(value);
+}
+
+function measureJsonLength(value) {
+  try {
+    return JSON.stringify(value ?? null).length;
+  } catch (_error) {
+    return 0;
+  }
+}
+
+function removeEmptyFields(input) {
+  const output = {};
+  for (const [key, value] of Object.entries(input || {})) {
+    if (value === "" || value === undefined || value === null) {
+      continue;
+    }
+    if (Array.isArray(value) && value.length === 0) {
+      continue;
+    }
+    output[key] = value;
+  }
+  return output;
 }
 
 function cloneArray(value) {

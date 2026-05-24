@@ -6,6 +6,7 @@ const {
   confirmAiJobPlanTransaction,
   confirmResearchNoteDraftSavedToZoteroTransaction,
   createAiJobPlanTransaction,
+  createLiteratureDiscoveryPlanTransaction,
   createZoteroImportPlanTransaction,
   createZoteroWriteQueueTransaction,
   createResearchNoteDraftTransaction,
@@ -15,6 +16,7 @@ const {
   promoteGraphSeedTransaction,
   recordAiTaskQueueResultTransaction,
   recordAiTaskQueueResultWithDraftsTransaction,
+  recordLiteratureDiscoveryCandidatesTransaction,
   recordZoteroWriteQueueResultTransaction,
   replaceWorkbenchSnapshotFromImportTransaction,
   reviewGraphSeedTransaction,
@@ -374,6 +376,88 @@ test("markDocumentCandidateReviewedTransaction updates candidate review state an
   assert.equal(result.snapshot.documentCandidates[0].reviewState, "confirmed");
   assert.equal(result.snapshot.documentCandidates[0].reviewedBy, "user");
   assert.equal(result.snapshot.taskLedger.at(-1).workflowStep, "review-document-candidate");
+});
+
+test("recordLiteratureDiscoveryCandidatesTransaction compacts raw source payloads before snapshot persistence", () => {
+  const hugeAbstractIndex = Array.from({ length: 120 }, (_entry, index) => ({
+    section: `section-${index}`,
+    text: "large third-party payload ".repeat(80)
+  }));
+  const result = recordLiteratureDiscoveryCandidatesTransaction({
+    snapshot: {
+      schemaVersion: 1,
+      exportedAt: "old",
+      researchTopics: [{ id: "topic-a", title: "Topic", linkedCandidateIds: [] }],
+      documentCandidates: [],
+      taskLedger: []
+    },
+    jobId: "literature-discovery-job-a",
+    topicId: "topic-a",
+    candidates: [
+      {
+        id: "candidate-a",
+        title: "Candidate A",
+        doi: "10.1000/a",
+        rawSourcePayload: {
+          openalex: {
+            id: "https://openalex.org/W123",
+            doi: "https://doi.org/10.1000/a",
+            abstract_inverted_index: hugeAbstractIndex,
+            nested: { repeated: "payload".repeat(20_000) }
+          }
+        }
+      }
+    ],
+    recordedAt: "2026-05-25T00:50:00.000Z"
+  });
+
+  const candidate = result.snapshot.documentCandidates[0];
+  const payloadText = JSON.stringify(candidate.rawSourcePayload);
+  assert.ok(payloadText.length < 2000);
+  assert.equal(candidate.rawSourcePayload.openalex.sourceRecordId, "https://openalex.org/W123");
+  assert.equal(candidate.rawSourcePayload.openalex.doi, "https://doi.org/10.1000/a");
+  assert.equal(candidate.rawSourcePayload.openalex.payloadCompacted, true);
+  assert.equal(candidate.rawSourcePayload.openalex.originalPayloadBytes > 20000, true);
+  assert.equal(candidate.rawSourcePayload.openalex.nested, undefined);
+  assert.equal(candidate.rawSourcePayload.openalex.abstract_inverted_index, undefined);
+});
+
+test("createLiteratureDiscoveryPlanTransaction compacts existing candidate payloads while normalizing snapshots", () => {
+  const result = createLiteratureDiscoveryPlanTransaction({
+    snapshot: {
+      schemaVersion: 1,
+      exportedAt: "old",
+      researchTopics: [{ id: "topic-a", title: "Topic" }],
+      documentCandidates: [
+        {
+          id: "candidate-existing",
+          title: "Existing Candidate",
+          rawSourcePayload: {
+            crossref: {
+              DOI: "10.1000/existing",
+              URL: "https://doi.org/10.1000/existing",
+              reference: Array.from({ length: 300 }, (_entry, index) => ({
+                DOI: `10.1000/ref-${index}`,
+                articleTitle: "reference payload ".repeat(80)
+              }))
+            }
+          }
+        }
+      ],
+      taskLedger: []
+    },
+    plan: {
+      job: { id: "literature-discovery-job-a", topicId: "topic-a", state: "draft", sources: ["openalex"] }
+    },
+    createdAt: "2026-05-25T00:51:00.000Z"
+  });
+
+  const candidate = result.snapshot.documentCandidates[0];
+  assert.ok(JSON.stringify(candidate.rawSourcePayload).length < 2000);
+  assert.equal(candidate.rawSourcePayload.crossref.sourceRecordId, "10.1000/existing");
+  assert.equal(candidate.rawSourcePayload.crossref.sourceUrl, "https://doi.org/10.1000/existing");
+  assert.equal(candidate.rawSourcePayload.crossref.payloadCompacted, true);
+  assert.equal(candidate.rawSourcePayload.crossref.reference, undefined);
 });
 
 test("createZoteroImportPlanTransaction stores plan and links it to the topic", () => {
