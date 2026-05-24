@@ -1,3 +1,4 @@
+(function () {
 const IMPORT_MODES = {
   workbenchOnly: "workbench-only",
   zoteroItem: "zotero-item",
@@ -281,3 +282,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchDocumentCandidateReview = WorkbenchDocumentCandidateReview;
 }
+})();

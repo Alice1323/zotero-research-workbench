@@ -1,3 +1,4 @@
+(function () {
 const SECRET_PLACEHOLDER = "<redacted>";
 
 function redactSecretMaterial(value) {
@@ -145,3 +146,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchSnapshot = WorkbenchSnapshot;
 }
+})();

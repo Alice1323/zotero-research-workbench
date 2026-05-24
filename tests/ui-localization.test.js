@@ -410,6 +410,22 @@ test("research panel runtime wires v0.4 pipeline skeleton actions", () => {
   assert.match(runtime, /zotero-import-plan-create"\)\.addEventListener\("click", createZoteroImportPlan\)/);
 });
 
+test("literature discovery plan creation reports visible progress and failures", () => {
+  const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
+  const createPlanBody = getFunctionBody(runtime, "createLiteratureDiscoveryPlan");
+
+  assert.match(createPlanBody, /try\s*\{/);
+  assert.match(createPlanBody, /setText\(\s*"document-candidate-review-status",\s*"正在生成发现计划\.\.\."\s*\)/);
+  assert.ok(
+    createPlanBody.indexOf("正在生成发现计划...") <
+      createPlanBody.indexOf("ResearchPanelOrchestrator.createLiteratureDiscoveryPlanWorkflow"),
+    "the panel should show progress before running the plan workflow"
+  );
+  assert.match(createPlanBody, /setText\(\s*"document-candidate-review-status",\s*"发现计划已生成，请确认后搜索"\s*\)/);
+  assert.match(createPlanBody, /showDiscoveryError\("创建发现计划失败", error\)/);
+  assert.match(createPlanBody, /return result/);
+});
+
 test("research panel runtime wires provider request guards", () => {
   const panel = fs.readFileSync(path.join(root, "chrome/content/researchPanel.xhtml"), "utf8");
   const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");

@@ -1,3 +1,4 @@
+(function () {
 function createWorkbenchFetchRuntime({ window } = {}) {
   const windowAdapter = window || {};
 
@@ -36,3 +37,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchFetchRuntime = WorkbenchFetchRuntime;
 }
+})();

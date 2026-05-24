@@ -8,10 +8,11 @@ GitHub 仓库名：`Alice1323/zotero-research-workbench`。
 
 ## 当前状态
 
-- `v0.2.0` 已作为稳定版本保留并发布。
-- `0.21.0-beta.1` / V0.21 beta 架构加固快照已推送到 GitHub `master`。
-- V0.3 的产品决策、ADR、设计文档和 Slice 1 实施计划已进入 `docs/`，作为下一阶段开发基线。
-- 当前目录是后续继续开发、测试、打包、发布的主入口。
+- `v0.2.0`、`v0.3.0` 等早期发布产物已保留在 `dist/`。
+- 当前本机主线版本是 `v0.4.0beta1`，对应 XPI 为 `dist/zotero-research-workbench-0.4.0beta1.xpi`。
+- V0.4 文献发现与导入流水线已在本机 `master` 分支实现并打包：研究主题、Document Candidate protocol、OpenAlex/Crossref/Unpaywall/HTTP connector、候选复核、异常阻断、Zotero Write Queue、工具栏入口、右键菜单入口和 Ethereal Reference 预留区。
+- 本机 `master` 曾显示比 `origin/master` 超前提交；继续交接前应重新核对 `git status --short --branch`。
+- 自动化代码检查和 Node 测试是交接前基线；真实 Zotero 工具栏、右键菜单、item/attachment 写入仍需要手动运行时 QA。
 
 ## 关键入口
 
@@ -33,16 +34,19 @@ GitHub 仓库名：`Alice1323/zotero-research-workbench`。
 - Workbench Local Store、Task Ledger、Graph Seed。
 - JSON/ZIP 导入导出和 WebDAV JSON 上传。
 - 图谱种子复核、引用关系图谱、作品身份线索、重复作品候选。
-- V0.21 架构切口：local store transaction、graph review workflow、research panel orchestrator。
+- AI Task Workspace：自然语言任务、计划确认、队列、重试/跳过/诊断和手动恢复。
+- V0.4 文献发现与导入流水线：研究主题、候选文献复核、导入计划和串行 Zotero 写入队列。
 
 ## 不要误用
 
 - 不要把这个目录当纯资料归档；这里是主代码工作树。
-- 不要随意删除 `dist/`、`.scratch/` 或未提交文件，里面可能有当前 beta 产物和审计材料。
+- 不要随意删除 `dist/`、`.scratch/` 或未提交文件，里面可能有当前发布包、测试产物、架构债和审计材料。
 - 不要从旧 `zoteroai项目/` 继续开发，除非是在做历史对照。
+- 不要把 `zotero-ai-literature-assistant-v1/` 当成当前主入口；当前主入口是本目录根部。
 
 ## 下一步建议
 
 1. 先核对 `git status --short --branch`。
-2. 若要继续 V0.3，先读 `docs/README.md`、V0.3 spec、ADR 和 Slice 1 plan。
-3. 实施 V0.3 前保持 `dist/` 发布包、`.scratch/` 自检草稿和代码提交分开处理。
+2. 交接或发布前运行 `npm run check`、`npm test`、`npm run package` 和 `node --test tests\package.test.js`。
+3. 在 Zotero 8/9 隔离 profile 中执行 `docs/first-run-manual-qa.md`，重点验证 V0.4 工具栏、右键菜单、发现计划确认、候选复核和 Zotero 写入队列。
+4. 若继续下一阶段，先读 `docs/README.md`、V0.4 spec/plan、ADR 和 manual QA 记录，再决定是否推进 V0.5 Ethereal Reference 图谱。

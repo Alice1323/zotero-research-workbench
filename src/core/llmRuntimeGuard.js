@@ -1,3 +1,4 @@
+(function () {
 const LLM_RUNTIME_LIMITS = {
   requestsPerMinute: { defaultValue: 20, min: 1, max: 600 },
   maxInputTokensPerTask: { defaultValue: 12000, min: 1000, max: 200000 },
@@ -97,3 +98,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchLlmRuntimeGuard = WorkbenchLlmRuntimeGuard;
 }
+})();

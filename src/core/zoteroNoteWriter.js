@@ -1,3 +1,4 @@
+(function () {
 async function writeZoteroChildNote({ Zotero, parentItem, html } = {}) {
   if (!Zotero?.Item || !parentItem?.id) {
     throw new Error("无法读取 Zotero 选中文献");
@@ -40,3 +41,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchZoteroNoteWriter = WorkbenchZoteroNoteWriter;
 }
+})();

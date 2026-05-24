@@ -1,3 +1,4 @@
+(function () {
 const ProviderRequestPolicy =
   typeof require === "function"
     ? require("./providerRequestPolicy")
@@ -647,3 +648,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchAiTaskWorkspace = WorkbenchAiTaskWorkspace;
 }
+})();

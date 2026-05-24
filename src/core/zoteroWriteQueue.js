@@ -1,3 +1,4 @@
+(function () {
 const WRITE_QUEUE_STATES = {
   queued: "queued",
   running: "running",
@@ -383,3 +384,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchZoteroWriteQueue = WorkbenchZoteroWriteQueue;
 }
+})();

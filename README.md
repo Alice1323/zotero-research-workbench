@@ -61,7 +61,7 @@ npm run check
 npm run package
 ```
 
-The package command writes `dist/zotero-research-workbench-0.4.0.xpi`.
+The package command writes `dist/zotero-research-workbench-0.4.0beta1.xpi`.
 
 ## First Release QA
 

@@ -1,3 +1,4 @@
+(function () {
 function createWebDavClient({ fetchImpl } = {}) {
   const requestAdapter = typeof fetchImpl === "function" ? fetchImpl : null;
 
@@ -22,3 +23,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchWebDavClient = WorkbenchWebDavClient;
 }
+})();

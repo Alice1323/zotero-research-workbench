@@ -1,3 +1,4 @@
+(function () {
 function buildOpenAIChatCompletionsUrl(baseUrl) {
   return `${cleanString(baseUrl).replace(/\/+$/, "")}/chat/completions`;
 }
@@ -173,3 +174,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchProviderChatCompletion = WorkbenchProviderChatCompletion;
 }
+})();

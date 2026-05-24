@@ -1,3 +1,4 @@
+(function () {
 function createClipboardWriter({ writeText, document, createElement } = {}) {
   const asyncWriter = typeof writeText === "function" ? writeText : null;
   const documentAdapter = document || null;
@@ -50,3 +51,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchClipboardWriter = WorkbenchClipboardWriter;
 }
+})();

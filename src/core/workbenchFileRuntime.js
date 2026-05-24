@@ -1,3 +1,4 @@
+(function () {
 function createWorkbenchFileRuntime({ getZotero, getComponents, window, console } = {}) {
   const zoteroProvider = typeof getZotero === "function" ? getZotero : () => null;
   const componentsProvider = typeof getComponents === "function" ? getComponents : () => null;
@@ -193,3 +194,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchFileRuntime = WorkbenchFileRuntime;
 }
+})();

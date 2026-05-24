@@ -1,3 +1,4 @@
+(function () {
 function normalizeProviderConcurrencyLimit(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -125,3 +126,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchProviderRequestPolicy = WorkbenchProviderRequestPolicy;
 }
+})();

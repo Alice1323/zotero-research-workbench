@@ -1,3 +1,4 @@
+(function () {
 const DocumentCandidateProtocol =
   typeof require === "function"
     ? require("./documentCandidateProtocol")
@@ -205,3 +206,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchLiteratureDiscovery = WorkbenchLiteratureDiscovery;
 }
+})();

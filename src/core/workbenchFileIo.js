@@ -1,3 +1,4 @@
+(function () {
 function createWorkbenchFileIo({ IOUtils, OS, TextEncoder, TextDecoder, getComponents } = {}) {
   const componentsProvider = typeof getComponents === "function" ? getComponents : () => null;
   const textEncoderClass = TextEncoder;
@@ -230,3 +231,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchFileIo = WorkbenchFileIo;
 }
+})();

@@ -1,3 +1,4 @@
+(function () {
 function createResearchTopicInput({ title, description, sourceScopes, zoteroItemKeys, createdAt, existingTopicIds } = {}) {
   const timestamp = cleanText(createdAt) || new Date().toISOString();
   const baseId = `research-topic-${createStableTimestamp(timestamp)}`;
@@ -201,3 +202,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchResearchTopic = WorkbenchResearchTopic;
 }
+})();

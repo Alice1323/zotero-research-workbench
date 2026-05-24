@@ -1,3 +1,4 @@
+(function () {
 function createEtherealReferenceReadModel(snapshot = {}, { topicId } = {}) {
   const normalizedTopicId = cleanText(topicId);
   const topic = findTopic(snapshot.researchTopics, normalizedTopicId);
@@ -213,3 +214,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchEtherealReferenceGraph = WorkbenchEtherealReferenceGraph;
 }
+})();

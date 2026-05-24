@@ -1,3 +1,4 @@
+(function () {
 const SNAPSHOT_PREF_KEY = "extensions.zotero-research-workbench.store.snapshot";
 
 function createEmptyWorkbenchSnapshot({ now } = {}) {
@@ -62,3 +63,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchRuntimeStore = WorkbenchRuntimeStore;
 }
+})();

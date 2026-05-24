@@ -1,3 +1,4 @@
+(function () {
 async function writeZoteroItemFromIntent({ Zotero, intent, libraryId } = {}) {
   if (!Zotero?.Item) {
     throw new Error("无法创建 Zotero 条目");
@@ -79,3 +80,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchZoteroItemWriter = WorkbenchZoteroItemWriter;
 }
+})();

@@ -1,3 +1,4 @@
+(function () {
 const CANDIDATE_ANOMALY_TAGS = {
   missingTitle: "缺少标题",
   missingIdentity: "缺少身份线索",
@@ -440,3 +441,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchDocumentCandidateProtocol = WorkbenchDocumentCandidateProtocol;
 }
+})();

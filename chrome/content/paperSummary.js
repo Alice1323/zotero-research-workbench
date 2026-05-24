@@ -106,8 +106,9 @@
     throw new Error("WorkbenchClipboardWriter runtime Module is unavailable");
   }
   const { createBrowserClipboardWriter } = WorkbenchClipboardWriter;
+  const browserNavigator = typeof navigator === "undefined" ? window.navigator : navigator;
   const { writeClipboardText } = createBrowserClipboardWriter({
-    navigator,
+    navigator: browserNavigator,
     document,
     createElement: createHtmlElement
   });
@@ -1156,34 +1157,42 @@
   }
 
   function createLiteratureDiscoveryPlan() {
-    const createdAt = new Date().toISOString();
-    const snapshot = loadWorkbenchSnapshot();
-    const requestText = cleanText(getField("literature-discovery-request")?.value);
-    const sourceScopes = requestText ? [{ kind: "panel-query", query: requestText }] : [];
-    const topic = createResearchTopicInput({
-      title: getField("research-topic-title")?.value,
-      description: getField("research-topic-description")?.value,
-      sourceScopes,
-      createdAt,
-      existingTopicIds: (snapshot.researchTopics || []).map((entry) => entry.id)
-    });
-    const result = ResearchPanelOrchestrator.createLiteratureDiscoveryPlanWorkflow({
-      snapshot: {
-        ...snapshot,
-        researchTopics: [...(Array.isArray(snapshot.researchTopics) ? snapshot.researchTopics : []), topic]
-      },
-      topicId: topic.id,
-      requestText,
-      launchSurface: "research-panel",
-      sourceScopes,
-      sources: readLiteratureDiscoverySources(),
-      createdAt
-    });
-    saveWorkbenchSnapshot(result.snapshot);
-    window.WorkbenchLiteratureDiscoveryPlan = result.plan;
-    renderLiteratureDiscoveryPlanPreview(result.plan);
-    renderDocumentCandidateReview(result.records.candidateReview);
-    renderZoteroWriteQueue(result.records.zoteroWriteQueue);
+    try {
+      setText("document-candidate-review-status", "正在生成发现计划...");
+      const createdAt = new Date().toISOString();
+      const snapshot = loadWorkbenchSnapshot();
+      const requestText = cleanText(getField("literature-discovery-request")?.value);
+      const sourceScopes = requestText ? [{ kind: "panel-query", query: requestText }] : [];
+      const topic = createResearchTopicInput({
+        title: getField("research-topic-title")?.value,
+        description: getField("research-topic-description")?.value,
+        sourceScopes,
+        createdAt,
+        existingTopicIds: (snapshot.researchTopics || []).map((entry) => entry.id)
+      });
+      const result = ResearchPanelOrchestrator.createLiteratureDiscoveryPlanWorkflow({
+        snapshot: {
+          ...snapshot,
+          researchTopics: [...(Array.isArray(snapshot.researchTopics) ? snapshot.researchTopics : []), topic]
+        },
+        topicId: topic.id,
+        requestText,
+        launchSurface: "research-panel",
+        sourceScopes,
+        sources: readLiteratureDiscoverySources(),
+        createdAt
+      });
+      saveWorkbenchSnapshot(result.snapshot);
+      window.WorkbenchLiteratureDiscoveryPlan = result.plan;
+      renderLiteratureDiscoveryPlanPreview(result.plan);
+      renderDocumentCandidateReview(result.records.candidateReview);
+      renderZoteroWriteQueue(result.records.zoteroWriteQueue);
+      setText("document-candidate-review-status", "发现计划已生成，请确认后搜索");
+      return result;
+    } catch (error) {
+      showDiscoveryError("创建发现计划失败", error);
+      return null;
+    }
   }
 
   function readLiteratureDiscoverySources() {

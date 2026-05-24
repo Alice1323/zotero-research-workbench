@@ -69,10 +69,82 @@ export class WorkbenchPlugin {
 
     const button = this.createChromeElement(doc, "toolbarbutton", "button");
     button.id = "zrw-toolbar-open-research-panel";
-    button.setAttribute("label", "研究工作台");
+    button.classList?.add("zotero-tb-button");
+    button.classList?.add("zrw-toolbar-button");
+    button.setAttribute("label", "");
+    button.setAttribute("aria-label", "研究工作台");
     button.setAttribute("tooltiptext", "打开 Zotero 研究工作台");
+    button.setAttribute("image", this.getToolbarIconDataUri());
     button.addEventListener("command", () => this.openResearchPanel({ launchSurface: "toolbar" }));
+    const anchor = this.findToolbarActionGroupAnchor(toolbar);
+    if (anchor && toolbar.insertBefore) {
+      toolbar.insertBefore(button, anchor);
+      return;
+    }
     toolbar.appendChild(button);
+  }
+
+  findToolbarActionGroupAnchor(toolbar) {
+    const children = Array.from(toolbar?.children || []);
+    const noteButton = children.find((child) => child?.id === "zotero-tb-note-add");
+    if (noteButton) {
+      return this.findNextToolbarSibling(noteButton);
+    }
+    const spacer = children.find((child) => this.isToolbarFlexSpacer(child));
+    if (spacer) {
+      return spacer;
+    }
+    return this.findToolbarSearchAnchor(toolbar);
+  }
+
+  findNextToolbarSibling(element) {
+    const siblings = Array.from(element?.parentNode?.children || []);
+    const index = siblings.indexOf(element);
+    if (index < 0) {
+      return null;
+    }
+    return siblings[index + 1] || null;
+  }
+
+  isToolbarFlexSpacer(element) {
+    const tagName = String(element?.tagName || "").toLowerCase();
+    const id = String(element?.id || "").toLowerCase();
+    const flex = String(element?.getAttribute?.("flex") || "");
+    return tagName === "spacer" || id.includes("spacer") || flex === "1";
+  }
+
+  findToolbarSearchAnchor(toolbar) {
+    const children = Array.from(toolbar?.children || []);
+    return children.find((child) => this.isToolbarSearchControl(child)) || null;
+  }
+
+  isToolbarSearchControl(element) {
+    const id = String(element?.id || "").toLowerCase();
+    const tagName = String(element?.tagName || "").toLowerCase();
+    const ariaLabel = String(element?.getAttribute?.("aria-label") || "").toLowerCase();
+    const placeholder = String(element?.getAttribute?.("placeholder") || "").toLowerCase();
+    return (
+      tagName.includes("search") ||
+      id.includes("search") ||
+      id.includes("quicksearch") ||
+      ariaLabel.includes("search") ||
+      ariaLabel.includes("搜索") ||
+      placeholder.includes("search") ||
+      placeholder.includes("搜索")
+    );
+  }
+
+  getToolbarIconDataUri() {
+    const svg = [
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="context-fill" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">',
+      '<path d="M2.5 11.5V4.5l5.5-2 5.5 2v7l-5.5 2-5.5-2Z"/>',
+      '<path d="M8 2.5v11"/>',
+      '<path d="M2.5 4.5l5.5 2 5.5-2"/>',
+      '<path d="M5.25 8.25h5.5"/>',
+      '<path d="M5.25 10.25h5.5"/>',
+      "</svg>"
+    ].join("");
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
   }
 
   addItemContextMenu(win) {

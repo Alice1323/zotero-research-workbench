@@ -1,3 +1,4 @@
+(function () {
 function createGraphSeedInput({
   paper,
   target,
@@ -309,3 +310,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchGraphSeed = WorkbenchGraphSeed;
 }
+})();

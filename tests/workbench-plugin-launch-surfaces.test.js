@@ -45,7 +45,14 @@ test("toolbar and context menu launch options are passed to the research panel",
   plugin.addToWindow(win);
 
   assert.ok(doc.getElementById("zrw-open-research-panel"));
-  assert.ok(doc.getElementById("zrw-toolbar-open-research-panel"));
+  const toolbarButton = doc.getElementById("zrw-toolbar-open-research-panel");
+  assert.ok(toolbarButton);
+  assert.equal(toolbarButton.attributes.label, "");
+  assert.equal(toolbarButton.attributes["aria-label"], "研究工作台");
+  assert.equal(toolbarButton.attributes.tooltiptext, "打开 Zotero 研究工作台");
+  assert.match(toolbarButton.attributes.image, /^data:image\/svg\+xml,/);
+  assert.ok(toolbarButton.classList.contains("zotero-tb-button"));
+  assert.ok(toolbarButton.classList.contains("zrw-toolbar-button"));
   assert.ok(doc.getElementById("zrw-context-create-discovery-plan"));
 
   doc.getElementById("zrw-toolbar-open-research-panel").dispatch("command");
@@ -64,6 +71,96 @@ test("toolbar and context menu launch options are passed to the research panel",
   assert.equal(doc.getElementById("zrw-context-create-discovery-plan"), null);
 });
 
+test("toolbar button is inserted before Zotero search controls", async () => {
+  const { WorkbenchPlugin } = await import(
+    pathToFileURL(path.join(root, "chrome/content/workbenchPlugin.mjs")).href
+  );
+  const doc = createFakeDocument();
+  const toolbar = doc.getElementById("zotero-items-toolbar");
+  toolbar.appendChild(createFakeElementWithId("zotero-tb-new-item", "toolbarbutton", doc.elements));
+  toolbar.appendChild(createFakeElementWithId("zotero-tb-note", "toolbarbutton", doc.elements));
+  toolbar.appendChild(createFakeElementWithId("zotero-tb-search", "searchbox", doc.elements));
+  const win = { document: doc };
+  const plugin = new WorkbenchPlugin({
+    id: "zotero-research-workbench",
+    version: "0.4.0beta1",
+    rootURI: "",
+    Zotero: { getMainWindow: () => win, getMainWindows: () => [win] }
+  });
+
+  plugin.addToolbarButton(win);
+
+  assert.deepEqual(
+    toolbar.children.map((child) => child.id),
+    ["zotero-tb-new-item", "zotero-tb-note", "zrw-toolbar-open-research-panel", "zotero-tb-search"]
+  );
+});
+
+test("toolbar button is inserted before nested Zotero search containers", async () => {
+  const { WorkbenchPlugin } = await import(
+    pathToFileURL(path.join(root, "chrome/content/workbenchPlugin.mjs")).href
+  );
+  const doc = createFakeDocument();
+  const toolbar = doc.getElementById("zotero-items-toolbar");
+  const searchContainer = createFakeElementWithId("zotero-tb-search-container", "hbox", doc.elements);
+  searchContainer.appendChild(createFakeElementWithId("zotero-tb-search-input", "searchbox", doc.elements));
+  toolbar.appendChild(createFakeElementWithId("zotero-tb-new-item", "toolbarbutton", doc.elements));
+  toolbar.appendChild(createFakeElementWithId("zotero-tb-note", "toolbarbutton", doc.elements));
+  toolbar.appendChild(searchContainer);
+  const win = { document: doc };
+  const plugin = new WorkbenchPlugin({
+    id: "zotero-research-workbench",
+    version: "0.4.0beta1",
+    rootURI: "",
+    Zotero: { getMainWindow: () => win, getMainWindows: () => [win] }
+  });
+
+  plugin.addToolbarButton(win);
+
+  assert.deepEqual(
+    toolbar.children.map((child) => child.id),
+    ["zotero-tb-new-item", "zotero-tb-note", "zrw-toolbar-open-research-panel", "zotero-tb-search-container"]
+  );
+});
+
+test("toolbar button is inserted inside the Zotero item action group before the flex spacer", async () => {
+  const { WorkbenchPlugin } = await import(
+    pathToFileURL(path.join(root, "chrome/content/workbenchPlugin.mjs")).href
+  );
+  const doc = createFakeDocument();
+  const toolbar = doc.getElementById("zotero-items-toolbar");
+  const spacer = createFakeElementWithId("zotero-items-toolbar-flex-spacer", "spacer", doc.elements);
+  spacer.setAttribute("flex", "1");
+  toolbar.appendChild(createFakeElementWithId("zotero-tb-add", "toolbarbutton", doc.elements));
+  toolbar.appendChild(createFakeElementWithId("zotero-tb-lookup", "toolbarbutton", doc.elements));
+  toolbar.appendChild(createFakeElementWithId("zotero-tb-attachment-add", "toolbarbutton", doc.elements));
+  toolbar.appendChild(createFakeElementWithId("zotero-tb-note-add", "toolbarbutton", doc.elements));
+  toolbar.appendChild(spacer);
+  toolbar.appendChild(createFakeElementWithId("zotero-tb-search", "quick-search-textbox", doc.elements));
+  const win = { document: doc };
+  const plugin = new WorkbenchPlugin({
+    id: "zotero-research-workbench",
+    version: "0.4.0beta1",
+    rootURI: "",
+    Zotero: { getMainWindow: () => win, getMainWindows: () => [win] }
+  });
+
+  plugin.addToolbarButton(win);
+
+  assert.deepEqual(
+    toolbar.children.map((child) => child.id),
+    [
+      "zotero-tb-add",
+      "zotero-tb-lookup",
+      "zotero-tb-attachment-add",
+      "zotero-tb-note-add",
+      "zrw-toolbar-open-research-panel",
+      "zotero-items-toolbar-flex-spacer",
+      "zotero-tb-search"
+    ]
+  );
+});
+
 function createFakeDocument() {
   const elements = new Map();
   const toolsMenu = createFakeElement("menupopup", elements);
@@ -74,6 +171,7 @@ function createFakeDocument() {
   registerElement(elements, "zotero-itemmenu", contextMenu);
 
   return {
+    elements,
     createXULElement(tagName) {
       return createFakeElement(tagName, elements);
     },
@@ -97,6 +195,10 @@ function createFakeElement(tagName, elements) {
     listeners: {},
     parentNode: null,
     id: "",
+    classList: createFakeClassList(),
+    getAttribute(name) {
+      return this.attributes[name] || "";
+    },
     setAttribute(name, value) {
       this.attributes[name] = value;
     },
@@ -106,6 +208,18 @@ function createFakeElement(tagName, elements) {
     appendChild(child) {
       child.parentNode = this;
       this.children.push(child);
+      if (child.id) {
+        elements.set(child.id, child);
+      }
+    },
+    insertBefore(child, anchor) {
+      child.parentNode = this;
+      const anchorIndex = this.children.indexOf(anchor);
+      if (anchorIndex < 0) {
+        this.children.push(child);
+      } else {
+        this.children.splice(anchorIndex, 0, child);
+      }
       if (child.id) {
         elements.set(child.id, child);
       }
@@ -122,6 +236,27 @@ function createFakeElement(tagName, elements) {
       }
     }
   };
+}
+
+function createFakeClassList() {
+  const classes = new Set();
+  return {
+    add(...names) {
+      for (const name of names) {
+        classes.add(name);
+      }
+    },
+    contains(name) {
+      return classes.has(name);
+    }
+  };
+}
+
+function createFakeElementWithId(id, tagName, elements) {
+  const element = createFakeElement(tagName, elements);
+  element.id = id;
+  elements.set(id, element);
+  return element;
 }
 
 function registerElement(elements, id, element) {

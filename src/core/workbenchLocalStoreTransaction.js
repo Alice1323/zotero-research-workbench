@@ -1,3 +1,4 @@
+(function () {
 const SAFE_PROMPT_TEMPLATE_VARIABLES = new Set([
   "selectedText",
   "itemTitle",
@@ -882,3 +883,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchLocalStoreTransaction = WorkbenchLocalStoreTransaction;
 }
+})();

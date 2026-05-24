@@ -8,11 +8,11 @@ const root = path.resolve(__dirname, "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 const packagedXpiPath = path.join(root, "dist", `zotero-research-workbench-${manifest.version}.xpi`);
 
-test("manifest and package version track v0.4 release while preserving v0.3 artifact", () => {
+test("manifest and package version track v0.4 beta release while preserving v0.3 artifact", () => {
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 
-  assert.equal(manifest.version, "0.4.0");
-  assert.equal(packageJson.version, "0.4.0");
+  assert.equal(manifest.version, "0.4.0beta1");
+  assert.equal(packageJson.version, "0.4.0-beta.1");
   assert.equal(fs.existsSync(path.join(root, "dist", "zotero-research-workbench-0.3.0.xpi")), true);
 });
 

@@ -1,3 +1,4 @@
+(function () {
 const graphSeedModule =
   typeof require === "function" ? require("./graphSeed") : window.WorkbenchGraphSeed;
 const workIdentityModule =
@@ -134,3 +135,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchGraphReviewWorkflow = WorkbenchGraphReviewWorkflow;
 }
+})();

@@ -1,3 +1,4 @@
+(function () {
 function createWorkbenchSelectedPaperRuntime({ getZotero, console } = {}) {
   const zoteroProvider = typeof getZotero === "function" ? getZotero : () => null;
   const consoleAdapter = console || null;
@@ -211,3 +212,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchSelectedPaperRuntime = WorkbenchSelectedPaperRuntime;
 }
+})();

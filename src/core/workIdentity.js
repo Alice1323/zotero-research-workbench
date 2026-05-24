@@ -1,3 +1,4 @@
+(function () {
 function listWorkIdentitiesForInspector(snapshot, filters = {}) {
   const byWorkId = new Map();
 
@@ -365,3 +366,4 @@ if (typeof module !== "undefined" && module.exports) {
 if (typeof window !== "undefined") {
   window.WorkbenchWorkIdentity = WorkbenchWorkIdentity;
 }
+})();
