@@ -206,6 +206,7 @@ A Workbench Local Store-only test record inserted for human UI verification. Man
 - "寻找文献" was expanded beyond the current Zotero selection; resolved as **Literature Discovery** over an explicit **Discovery Scope**, including local Zotero library search and approved external sources.
 - "Sci-Hub 等网站" was proposed as an external source; resolved as **Blocked Literature Source** for integration work, not an approved discovery or download provider.
 - "留出接入端口" was resolved as a generic **External Literature Connector** boundary, not a named or assisted Sci-Hub integration.
+- PDF acquisition work must use `docs/superpowers/plans/2026-05-25-pdf-acquisition-baseline.md` as the controlling baseline. Sci-Hub and similar unauthorized access services are **Blocked Literature Sources**, not future connector work.
 - "一切决定由用户来做" was resolved as a **User Confirmation Gate** before document import or Zotero write side effects.
 - "导入文献" was resolved as three explicit user-selected modes: **Workbench-Only Import**, **Attachment Import**, and **Item And Attachment Import**.
 - "AI 自动了解需要干嘛" was resolved as automatic **AI Job Plan** generation, not automatic execution of external, costly, import, or Zotero-write side effects.
