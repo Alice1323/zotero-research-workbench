@@ -1483,8 +1483,8 @@
             result = await writeZoteroAttachmentFromIntent({
               Zotero: getZotero(),
               intent: next.entry.writeIntent,
-              parentItemId: next.entry.resolvedZoteroItemId,
-              parentItemKey: next.entry.resolvedZoteroItemKey
+              parentItemId: next.entry.resolvedZoteroItemId || next.entry.writeIntent.parentItemId,
+              parentItemKey: next.entry.resolvedZoteroItemKey || next.entry.writeIntent.parentItemKey
             });
           } else {
             throw new Error("不支持的 Zotero 写入意图");

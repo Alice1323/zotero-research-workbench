@@ -89,6 +89,31 @@ test("writeZoteroAttachmentFromIntent imports a URL attachment", async () => {
   assert.equal(calls[0].url, "https://example.org/paper.pdf");
 });
 
+test("writeZoteroAttachmentFromIntent attaches a URL PDF to an existing Zotero item", async () => {
+  const calls = [];
+  const Zotero = {
+    Attachments: {
+      importFromURL: async (input) => {
+        calls.push(input);
+        return { key: "ATTACH1", id: 456 };
+      }
+    }
+  };
+
+  const result = await writeZoteroAttachmentFromIntent({
+    Zotero,
+    intent: {
+      parentItemId: 123,
+      parentItemKey: "ABCD1234",
+      attachment: { kind: "open-access-pdf-url", url: "https://example.org/a.pdf", title: "A PDF" }
+    }
+  });
+
+  assert.equal(calls[0].parentItemID, 123);
+  assert.equal(calls[0].url, "https://example.org/a.pdf");
+  assert.equal(result.parentItemKey, "ABCD1234");
+});
+
 test("writeZoteroAttachmentFromIntent rejects unsupported attachments", async () => {
   await assert.rejects(
     () =>
