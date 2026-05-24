@@ -33,6 +33,7 @@ function createCandidateReviewRecord(candidate) {
   const normalized = clonePlain(candidate || {});
   const requiresDetailReview = candidateRequiresDetailReview(normalized);
   const reviewState = normalizeCandidateReviewState(normalized.reviewState, requiresDetailReview);
+  const pdfStatus = derivePdfStatus(normalized);
   const importableAttachmentIds = normalizeAttachments(normalized.attachments)
     .filter((attachment) => attachment.importable)
     .map((attachment) => cleanText(attachment.id || attachment.referenceId))
@@ -40,12 +41,35 @@ function createCandidateReviewRecord(candidate) {
 
   return {
     ...normalized,
+    ...pdfStatus,
     reviewState,
     requiresDetailReview,
     quickImportAllowed: reviewState === REVIEW_STATES.confirmed,
     importableAttachmentIds,
     anomalyTags: uniqueClean(normalized.anomalyTags)
   };
+}
+
+function derivePdfStatus(candidate = {}) {
+  const pdfAttachments = normalizeAttachments(candidate.attachments).filter((attachment) =>
+    ["open-access-pdf-url", "local-file", "connector-file-reference", "sci-hub-resolved-url"].includes(cleanText(attachment.kind))
+  );
+  const importable = pdfAttachments.filter((attachment) => attachment.importable);
+  if (importable.length) {
+    return {
+      pdfStatus: "available",
+      pdfStatusLabel: "可导入 PDF",
+      pdfSources: uniqueClean(importable.map((attachment) => attachment.provenance?.source || attachment.kind))
+    };
+  }
+  if (pdfAttachments.length) {
+    return {
+      pdfStatus: "blocked",
+      pdfStatusLabel: "PDF 需复核",
+      pdfSources: uniqueClean(pdfAttachments.map((attachment) => attachment.provenance?.source || attachment.kind))
+    };
+  }
+  return { pdfStatus: "missing", pdfStatusLabel: "未发现 PDF", pdfSources: [] };
 }
 
 function markCandidateReviewed({ snapshot, candidateId, reviewDecision, reviewNote, reviewedAt } = {}) {
@@ -269,6 +293,7 @@ const WorkbenchDocumentCandidateReview = {
   clonePlain,
   createCandidateReviewReadModel,
   createZoteroImportPlanFromCandidates,
+  derivePdfStatus,
   markCandidateReviewed,
   normalizeCandidateReviewState,
   normalizeImportMode,

@@ -43,6 +43,33 @@ test("candidate review read model filters by topic and exposes attachment choice
   assert.deepEqual(model.candidates[0].importableAttachmentIds, ["att-a"]);
 });
 
+test("candidate review read model exposes pdf status and provenance", () => {
+  const model = createCandidateReviewReadModel({
+    documentCandidates: [
+      {
+        id: "candidate-a",
+        topicId: "topic-a",
+        title: "Candidate A",
+        anomalyTags: [],
+        attachments: [
+          {
+            id: "att-a",
+            kind: "open-access-pdf-url",
+            url: "https://example.org/a.pdf",
+            importable: true,
+            license: "cc-by",
+            provenance: { source: "unpaywall", requestUrl: "https://api.unpaywall.org/v2/10.1000/a" }
+          }
+        ]
+      }
+    ]
+  }, { topicId: "topic-a" });
+
+  assert.equal(model.candidates[0].pdfStatus, "available");
+  assert.equal(model.candidates[0].pdfStatusLabel, "可导入 PDF");
+  assert.deepEqual(model.candidates[0].pdfSources, ["unpaywall"]);
+});
+
 test("markCandidateReviewed confirms an anomalous candidate for import", () => {
   const snapshot = {
     schemaVersion: 1,
