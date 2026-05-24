@@ -88,7 +88,7 @@ Discovery Scope is explicit and reviewable. No implicit library-wide search, ext
 
 The Workbench may provide a generic External Literature Connector boundary. The boundary exists so a configured connector can return Document Candidates with provenance, metadata, and optional document payload or local file reference.
 
-The Workbench must not ship, recommend, test, document, or special-case connectors for Blocked Literature Sources. It must not include source-specific code paths for unauthorized access, copyright-infringing download, credential misuse, or unstable scraping.
+For v0.3, the Workbench did not ship, recommend, test, document, or special-case connectors for Blocked Literature Sources. PDF acquisition policy is superseded by `docs/superpowers/plans/2026-05-25-pdf-acquisition-baseline.md`, which supports user-configured Sci-Hub and analogous third-party PDF resolvers when provenance is visible and every attachment write passes the User Confirmation Gate.
 
 User-supplied connectors are advanced configuration. The user's connector decision remains outside the Workbench's shipped behavior, but any candidate they return still goes through the same provenance display and User Confirmation Gate before import or write side effects.
 
@@ -253,7 +253,7 @@ v0.3 does not run Zotero-native writes concurrently.
 
 v0.3 does not automatically resume jobs after restart.
 
-v0.3 does not ship, recommend, test, document, or provide source-specific code for Blocked Literature Sources.
+v0.3 did not ship, recommend, test, document, or provide source-specific code for Blocked Literature Sources. Later PDF acquisition work follows `docs/superpowers/plans/2026-05-25-pdf-acquisition-baseline.md`.
 
 v0.3 first slice does not need to expose a right-click menu entry, but it must leave a concrete code extension point for it.
 

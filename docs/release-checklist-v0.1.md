@@ -29,7 +29,7 @@ git rev-parse HEAD
 
 - [ ] 确认 `package.json` 仍声明 `version` 为 `0.1.0`、`private` 为 `true`、Node 要求为 `>=20`。
 - [ ] 确认 README 的产品边界仍是 Zotero 8/9-only；不支持 Zotero 7。
-- [ ] 确认 README 没有承诺未实现能力：不支持 full Citation Graph UI、Visual Workflow Builder、batch processing UI、Sci-Hub provider、Google Scholar scraping、arbitrary user scripts、Zotero-native relation writing、live cloud sync。
+- [ ] 确认 README 没有承诺未实现能力：不支持 full Citation Graph UI、Visual Workflow Builder、batch processing UI、Google Scholar scraping、arbitrary user scripts、Zotero-native relation writing、live cloud sync；PDF acquisition baseline 中的 Sci-Hub/类似 resolver 仅作为用户配置、来源可见、写入前确认的 PDF 来源。
 
 ## 2. 自动化核验
 

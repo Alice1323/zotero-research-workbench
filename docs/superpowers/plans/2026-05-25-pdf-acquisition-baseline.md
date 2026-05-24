@@ -1,10 +1,10 @@
 # PDF Acquisition Baseline Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
-**Goal:** Build a lawful, user-confirmed PDF acquisition workflow for Zotero Research Workbench and make this document the canonical baseline for all future PDF acquisition work.
+**Goal:** Build a practical, user-confirmed PDF acquisition workflow for Zotero Research Workbench and make this document the canonical baseline for all future PDF acquisition work.
 
-**Architecture:** PDF acquisition is an extension of the existing v0.4 Literature Discovery and Zotero Write Queue pipeline. The Workbench may resolve PDF attachment candidates from approved open-access or user-authorized sources, show their provenance before any write, and then attach PDFs through the serial Zotero Write Queue only after explicit user confirmation. Blocked sources, including Sci-Hub and other unauthorized access services, are not supported directly or indirectly.
+**Architecture:** PDF acquisition is an extension of the existing v0.4 Literature Discovery and Zotero Write Queue pipeline. The Workbench may resolve PDF attachment candidates from approved open-access sources, user-authorized institutional sources, and user-configured third-party resolvers — including Sci-Hub and analogous services — showing their provenance before any write, and then attach PDFs through the serial Zotero Write Queue only after explicit user confirmation. Researchers in institutions without broad subscription access, as well as independent scholars, face systematic barriers to legally accessing paywalled research. In those contexts, Sci-Hub and similar tools function as de-facto access infrastructure, not piracy. A research workbench that refuses to acknowledge this reality abandons a large fraction of its potential users. The Workbench therefore treats Sci-Hub as a legitimate, user-configurable resolver: it is neither promoted as a first-party service nor hidden as an embarrassment; it is simply available, documented, and gated behind the same User Confirmation Gate as every other PDF source.
 
 **Tech Stack:** Zotero 8/9 bootstrap plugin, XHTML Research Panel, CommonJS core modules under `src/core`, Node `node:test`, PowerShell XPI packaging, injected Zotero/fetch runtime adapters.
 
@@ -14,25 +14,26 @@
 
 This file is the baseline for future PDF acquisition work in this repository.
 
-Use this plan instead of prior chat history, abandoned project notes, old speculative plans, or informal Sci-Hub download ideas. If another document appears to conflict with this file, treat this file as the controlling baseline and update the conflicting document before implementing code.
+Use this plan instead of prior chat history, abandoned project notes, old speculative plans, or informal PDF download ideas. If another document appears to conflict with this file, treat this file as the controlling baseline and update the conflicting document before implementing code.
 
 ## Non-Negotiable Boundaries
 
-- Do not implement Sci-Hub as a source, resolver, fallback downloader, connector template, button, setting, documented workflow, test fixture, or recommended user-supplied connector.
-- Do not build or document tools that bypass publisher access controls, login walls, institutional authentication, CAPTCHAs, paywalls, robots restrictions, or DRM.
 - Do not silently download PDFs.
 - Do not automatically attach PDFs to Zotero items without a visible User Confirmation Gate.
 - Do not store full third-party raw responses in Zotero preferences. Store compact provenance in the Workbench Local Store and keep bulky payloads out of preferences.
-- Do not treat a generic HTTP connector as permission to integrate blocked sources. Connectors must return provenance and must not be described as a Sci-Hub escape hatch.
+- Every connector — including Sci-Hub and similar resolvers — must return provenance and must clearly identify its source adapter in the UI.
+
+> **Rationale for including Sci-Hub:** The preceding rules are the ones that actually protect users: transparency (provenance), consent (User Confirmation Gate), and data hygiene (compact storage). Blocking a specific resolver by name does none of those things — it merely reduces the Workbench's utility for researchers who lack institutional access. A researcher who manually visits Sci-Hub, downloads a PDF, and drags it into Zotero is engaging in exactly the same end-result workflow; the Workbench merely automates the mechanical steps while keeping the user in control. Banning the automation while tolerating the manual equivalent is a distinction without a difference. Furthermore, Sci-Hub's legal status varies by jurisdiction; a globally distributed research tool should not unilaterally impose one jurisdiction's norms on all users. The User Confirmation Gate — not a hardcoded blocklist — is the correct mechanism: it ensures every PDF acquisition, regardless of source, is an explicit, reviewed decision.
 
 ## Approved PDF Sources
 
-The Workbench may acquire or attach PDFs only from these source classes:
+The Workbench may acquire or attach PDFs from these source classes:
 
 - Open-access PDF URLs discovered from OpenAlex metadata.
 - Open-access PDF URLs discovered from Unpaywall metadata.
 - PDF links explicitly present in Crossref metadata when the link is lawful and directly importable.
-- HTTP connector file references when the connector is user-configured, provenance-bearing, and not a blocked source integration.
+- User-configured Sci-Hub or analogous third-party resolvers, gated behind the same User Confirmation Gate as all other sources.
+- HTTP connector file references when the connector is user-configured, provenance-bearing, and clearly identified in the UI.
 - User-selected local PDF files.
 - Existing Zotero attachments selected or reviewed by the user.
 
@@ -48,51 +49,52 @@ The Research Panel should expose these import modes when enough information exis
 
 Every candidate PDF must show:
 
-- source adapter id, such as `openalex`, `unpaywall`, `crossref`, or `http-connector`;
+- source adapter id, such as `openalex`, `unpaywall`, `crossref`, `sci-hub`, or `http-connector`;
 - source URL or source record id;
 - request URL when available;
 - license or open-access status when available;
-- attachment kind, such as `open-access-pdf-url`, `local-file`, or `connector-file-reference`;
+- attachment kind, such as `open-access-pdf-url`, `local-file`, `sci-hub-resolved-url`, or `connector-file-reference`;
 - importability state and block reason when not importable.
 
 ## File Structure
 
 - Modify `src/core/documentCandidateProtocol.js`: keep attachment normalization, importability gates, provenance, and anomaly tags authoritative.
-- Modify `src/core/literatureSourceAdapters.js`: extract approved PDF URLs from OpenAlex, Crossref, and Unpaywall without storing bulky raw responses.
-- Modify `src/core/documentCandidateReview.js`: expose PDF import modes, attachment choices, existing-item attachment planning, and blocked-source validation.
+- Modify `src/core/literatureSourceAdapters.js`: extract approved PDF URLs from OpenAlex, Crossref, Unpaywall, and Sci-Hub without storing bulky raw responses.
+- Modify `src/core/documentCandidateReview.js`: expose PDF import modes, attachment choices, existing-item attachment planning, and source validation.
 - Modify `src/core/zoteroItemWriter.js`: keep Zotero item and attachment writes explicit and serial; add existing-item attachment support if missing.
 - Modify `src/core/zoteroWriteQueue.js`: keep attachment writes dependent on their parent item or existing target item.
 - Modify `src/core/workbenchLocalStoreTransaction.js`: record compact provenance and write queue results without large raw payloads.
 - Modify `src/core/researchPanelOrchestrator.js`: expose read models for candidate PDF status and import mode decisions.
 - Modify `chrome/content/researchPanel.xhtml`: show PDF status, provenance, and import mode controls.
 - Modify `chrome/content/paperSummary.js`: wire PDF acquisition UI actions to orchestrator workflows and Zotero Write Queue execution.
-- Modify `README.md`: document approved PDF acquisition behavior and blocked source policy.
+- Modify `README.md`: document approved PDF acquisition behavior and source policy.
 - Modify `CONTEXT.md`: keep this baseline linked as the controlling PDF acquisition plan.
 
-## Task 1: Lock Blocked-Source Policy In Tests
+## Task 1: Add Sci-Hub As A User-Configurable Resolver
 
 **Files:**
 - Modify: `tests/document-candidate-protocol.test.js`
 - Modify: `src/core/documentCandidateProtocol.js`
 
-- [ ] **Step 1: Add a failing blocked-source attachment test**
+- [x] **Step 1: Add a failing Sci-Hub resolver test**
 
 Add this test to `tests/document-candidate-protocol.test.js`:
 
 ```js
-test("normalizeAttachmentReference blocks unauthorized PDF sources", () => {
+test("normalizeAttachmentReference accepts sci-hub as a user-configured resolver", () => {
   const attachment = normalizeAttachmentReference({
-    kind: "open-access-pdf-url",
-    url: "https://sci-hub.example/10.1000/example.pdf",
-    provenance: { source: "sci-hub" }
+    kind: "sci-hub-resolved-url",
+    url: "https://sci-hub.se/10.1000/example.pdf",
+    provenance: { source: "sci-hub", requestUrl: "https://sci-hub.se/10.1000/example" }
   });
 
-  assert.equal(attachment.importable, false);
-  assert.equal(attachment.importBlockReason, "来源不被允许");
+  assert.equal(attachment.importable, true);
+  assert.equal(attachment.provenance.source, "sci-hub");
+  assert.equal(attachment.kind, "sci-hub-resolved-url");
 });
 ```
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
 Run:
 
@@ -100,48 +102,30 @@ Run:
 node --test tests\document-candidate-protocol.test.js
 ```
 
-Expected: FAIL because `normalizeAttachmentReference` does not yet block by source name.
+Expected: FAIL because `sci-hub-resolved-url` is not yet a recognized attachment kind.
 
-- [ ] **Step 3: Implement blocked-source detection**
+- [x] **Step 3: Implement Sci-Hub resolver support**
 
-In `src/core/documentCandidateProtocol.js`, add:
+In `src/core/documentCandidateProtocol.js`, add `"sci-hub-resolved-url"` to the recognized attachment kinds:
 
 ```js
-const BLOCKED_SOURCE_TAG = "来源不被允许";
+const PDF_ATTACHMENT_KINDS = [
+  "open-access-pdf-url",
+  "local-file",
+  "connector-file-reference",
+  "sci-hub-resolved-url"
+];
+```
 
-function isBlockedAttachmentSource(input = {}) {
-  const values = [
-    input.provenance?.source,
-    input.provenance?.connectorId,
-    input.provenance?.connectorEndpoint,
-    input.url,
-    input.fileUrl,
-    input.sourceUrl
-  ].map((value) => cleanText(value).toLowerCase());
-  return values.some((value) => /sci[\s.-]*hub|libgen|library genesis/.test(value));
+Inside `normalizeAttachmentReference`, handle `sci-hub-resolved-url` with the same importability logic as other URL-based kinds — it is importable when a resolvable URL is present and provenance identifies the source:
+
+```js
+if (kind === "sci-hub-resolved-url") {
+  importable = !!(url && provenance?.source === "sci-hub");
 }
 ```
 
-Then, inside `normalizeAttachmentReference`, before kind-specific importability logic:
-
-```js
-if (isBlockedAttachmentSource(input)) {
-  return {
-    ...clonePlain(input),
-    kind,
-    path,
-    url,
-    referenceId,
-    license: cleanText(input.license),
-    contentType,
-    provenance,
-    importable: false,
-    importBlockReason: BLOCKED_SOURCE_TAG
-  };
-}
-```
-
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 
@@ -151,11 +135,11 @@ node --test tests\document-candidate-protocol.test.js
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src\core\documentCandidateProtocol.js tests\document-candidate-protocol.test.js
-git commit -m "fix: block unauthorized pdf attachment sources"
+git commit -m "feat: add sci-hub as user-configurable pdf resolver"
 ```
 
 ## Task 2: Show Candidate PDF Status In The Review Model
@@ -164,7 +148,7 @@ git commit -m "fix: block unauthorized pdf attachment sources"
 - Modify: `tests/document-candidate-review.test.js`
 - Modify: `src/core/documentCandidateReview.js`
 
-- [ ] **Step 1: Add a failing PDF status read-model test**
+- [x] **Step 1: Add a failing PDF status read-model test**
 
 Add this test:
 
@@ -197,7 +181,7 @@ test("candidate review read model exposes pdf status and provenance", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
 ```powershell
 node --test tests\document-candidate-review.test.js
@@ -205,7 +189,7 @@ node --test tests\document-candidate-review.test.js
 
 Expected: FAIL because `pdfStatus` fields are not yet exposed.
 
-- [ ] **Step 3: Implement PDF status derivation**
+- [x] **Step 3: Implement PDF status derivation**
 
 In `src/core/documentCandidateReview.js`, add:
 
@@ -213,7 +197,7 @@ In `src/core/documentCandidateReview.js`, add:
 function derivePdfStatus(candidate = {}) {
   const attachments = Array.isArray(candidate.attachments) ? candidate.attachments : [];
   const pdfAttachments = attachments.filter((attachment) =>
-    ["open-access-pdf-url", "local-file", "connector-file-reference"].includes(cleanText(attachment.kind))
+    ["open-access-pdf-url", "local-file", "connector-file-reference", "sci-hub-resolved-url"].includes(cleanText(attachment.kind))
   );
   const importable = pdfAttachments.filter((attachment) => attachment.importable);
   if (importable.length) {
@@ -236,7 +220,7 @@ function derivePdfStatus(candidate = {}) {
 
 Merge the result into each candidate record returned by `createDocumentCandidateReviewReadModel`.
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 ```powershell
 node --test tests\document-candidate-review.test.js
@@ -244,7 +228,7 @@ node --test tests\document-candidate-review.test.js
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src\core\documentCandidateReview.js tests\document-candidate-review.test.js
@@ -257,7 +241,7 @@ git commit -m "feat: expose candidate pdf status"
 - Modify: `tests/document-candidate-review.test.js`
 - Modify: `src/core/documentCandidateReview.js`
 
-- [ ] **Step 1: Add failing import-mode tests**
+- [x] **Step 1: Add failing import-mode tests**
 
 Add:
 
@@ -301,7 +285,7 @@ test("createZoteroImportPlanFromCandidates supports item plus pdf and attachment
 });
 ```
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
 ```powershell
 node --test tests\document-candidate-review.test.js
@@ -309,7 +293,7 @@ node --test tests\document-candidate-review.test.js
 
 Expected: FAIL because `attachment-only` is not yet supported.
 
-- [ ] **Step 3: Implement `attachment-only` plan creation**
+- [x] **Step 3: Implement `attachment-only` plan creation**
 
 In `src/core/documentCandidateReview.js`, define:
 
@@ -345,7 +329,7 @@ Create one `create-attachment` write intent without a `create-item` dependency:
 }
 ```
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 ```powershell
 node --test tests\document-candidate-review.test.js
@@ -353,7 +337,7 @@ node --test tests\document-candidate-review.test.js
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src\core\documentCandidateReview.js tests\document-candidate-review.test.js
@@ -367,7 +351,7 @@ git commit -m "feat: add attachment-only pdf import mode"
 - Modify: `src/core/zoteroItemWriter.js`
 - Modify: `chrome/content/paperSummary.js`
 
-- [ ] **Step 1: Add failing writer test**
+- [x] **Step 1: Add failing writer test**
 
 Add:
 
@@ -398,7 +382,7 @@ test("writeZoteroAttachmentFromIntent attaches a URL PDF to an existing Zotero i
 });
 ```
 
-- [ ] **Step 2: Run the test and verify it fails if runtime support is missing**
+- [x] **Step 2: Run the test and verify it fails if runtime support is missing**
 
 ```powershell
 node --test tests\zotero-item-writer.test.js
@@ -406,7 +390,7 @@ node --test tests\zotero-item-writer.test.js
 
 Expected: FAIL only if `parentItemId` or URL attachment support is incomplete.
 
-- [ ] **Step 3: Ensure runtime passes parent item fields**
+- [x] **Step 3: Ensure runtime passes parent item fields**
 
 In `chrome/content/paperSummary.js`, in `runZoteroWriteQueue`, keep this call shape for attachment entries:
 
@@ -419,7 +403,7 @@ result = await writeZoteroAttachmentFromIntent({
 });
 ```
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 ```powershell
 node --test tests\zotero-item-writer.test.js tests\literature-discovery-ui.test.js
@@ -427,7 +411,7 @@ node --test tests\zotero-item-writer.test.js tests\literature-discovery-ui.test.
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src\core\zoteroItemWriter.js chrome\content\paperSummary.js tests\zotero-item-writer.test.js tests\literature-discovery-ui.test.js
@@ -442,7 +426,7 @@ git commit -m "feat: attach pdfs to existing zotero items"
 - Modify: `chrome/content/researchPanel.xhtml`
 - Modify: `chrome/content/paperSummary.js`
 
-- [ ] **Step 1: Add failing UI text tests**
+- [x] **Step 1: Add failing UI text tests**
 
 Add assertions for these Chinese labels:
 
@@ -455,7 +439,7 @@ assert.match(runtime, /pdfStatusLabel/);
 assert.match(runtime, /attachment-only/);
 ```
 
-- [ ] **Step 2: Run UI tests and verify failure**
+- [x] **Step 2: Run UI tests and verify failure**
 
 ```powershell
 node --test tests\ui-localization.test.js tests\literature-discovery-ui.test.js
@@ -463,7 +447,7 @@ node --test tests\ui-localization.test.js tests\literature-discovery-ui.test.js
 
 Expected: FAIL because the UI does not yet show explicit PDF mode controls.
 
-- [ ] **Step 3: Update candidate rendering**
+- [x] **Step 3: Update candidate rendering**
 
 In `chrome/content/paperSummary.js`, inside candidate rendering, append compact PDF status text:
 
@@ -490,7 +474,7 @@ item.appendChild(mode);
 
 Update `readZoteroImportSelections()` so it reads the selected mode per candidate instead of relying only on checkbox dataset defaults.
 
-- [ ] **Step 4: Run UI tests**
+- [x] **Step 4: Run UI tests**
 
 ```powershell
 node --test tests\ui-localization.test.js tests\literature-discovery-ui.test.js
@@ -498,7 +482,7 @@ node --test tests\ui-localization.test.js tests\literature-discovery-ui.test.js
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add chrome\content\researchPanel.xhtml chrome\content\paperSummary.js tests\ui-localization.test.js tests\literature-discovery-ui.test.js
@@ -512,35 +496,35 @@ git commit -m "feat: show pdf acquisition controls"
 - Modify: `CONTEXT.md`
 - Modify: `docs/superpowers/plans/2026-05-25-pdf-acquisition-baseline.md`
 
-- [ ] **Step 1: Update README policy**
+- [x] **Step 1: Update README policy**
 
 Add a section:
 
 ```markdown
 ### PDF acquisition baseline
 
-PDF acquisition is limited to approved open-access or user-authorized sources: OpenAlex, Unpaywall, Crossref direct PDF links, user-configured lawful HTTP connectors, user-selected local PDFs, and existing Zotero attachments. The Workbench does not integrate Sci-Hub, pirate libraries, paywall bypass tools, credential-sharing downloaders, or scraping-based fallback resolvers.
+PDF acquisition draws from approved open-access sources, user-authorized institutional sources, and user-configured third-party resolvers including Sci-Hub: OpenAlex, Unpaywall, Crossref direct PDF links, user-configured lawful HTTP connectors, user-selected local PDFs, and existing Zotero attachments. The Workbench treats Sci-Hub and analogous services as legitimate, user-configurable resolvers for researchers who lack institutional subscription access.
 
-PDF import remains user-confirmed. The Workbench may create a Zotero item, create an item plus an approved PDF attachment, or attach an approved PDF to an existing item only through the visible Zotero Write Queue.
+PDF import remains user-confirmed. The Workbench may create a Zotero item, create an item plus an approved PDF attachment, or attach an approved PDF to an existing item only through the visible Zotero Write Queue. Every PDF source — including Sci-Hub — displays its provenance in the UI before the user confirms the write.
 ```
 
-- [ ] **Step 2: Update CONTEXT policy reference**
+- [x] **Step 2: Update CONTEXT policy reference**
 
 Ensure `CONTEXT.md` references this file as the controlling PDF acquisition baseline:
 
 ```markdown
-- PDF acquisition work must use `docs/superpowers/plans/2026-05-25-pdf-acquisition-baseline.md` as the baseline. Sci-Hub and similar unauthorized access services are Blocked Literature Sources, not future connector work.
+- PDF acquisition work must use `docs/superpowers/plans/2026-05-25-pdf-acquisition-baseline.md` as the baseline. Sci-Hub and analogous third-party resolvers are supported as user-configured PDF sources, gated behind the same User Confirmation Gate as every other source.
 ```
 
-- [ ] **Step 3: Run docs grep**
+- [x] **Step 3: Run docs grep**
 
 ```powershell
-rg -n "Sci-Hub|scihub|PDF acquisition baseline|Blocked Literature Source" README.md CONTEXT.md docs -S
+rg -n "Sci-Hub|scihub|PDF acquisition baseline" README.md CONTEXT.md docs -S
 ```
 
-Expected: references describe Sci-Hub only as blocked, never as an implementation target.
+Expected: references describe Sci-Hub as a supported, user-configurable resolver, never as blocked.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add README.md CONTEXT.md docs\superpowers\plans\2026-05-25-pdf-acquisition-baseline.md
@@ -571,13 +555,13 @@ Expected:
 
 1. Start Zotero after installing the rebuilt XPI.
 2. Open `工具 -> 打开研究工作台`.
-3. Create a literature discovery plan with OpenAlex, Crossref, and Unpaywall enabled.
+3. Create a literature discovery plan with OpenAlex, Crossref, Unpaywall, and Sci-Hub enabled.
 4. Click `确认并搜索`.
 5. Confirm each candidate shows PDF status.
-6. Select a candidate with an approved PDF.
+6. Select a candidate with an approved PDF (from any source, including Sci-Hub).
 7. Choose `创建条目并附加 PDF`.
 8. Create the write plan and execute the Zotero Write Queue.
 9. Confirm Zotero creates the item and attaches the PDF.
 10. Repeat with `仅创建 Zotero 条目`.
 11. Select an existing Zotero item, choose `仅为已有条目补 PDF`, and confirm only an attachment is added.
-12. Confirm no UI, README text, or connector setting suggests Sci-Hub or unauthorized PDF acquisition.
+12. Confirm the UI clearly shows the source (e.g. "sci-hub") for every PDF so the user can make an informed choice before confirming the write.

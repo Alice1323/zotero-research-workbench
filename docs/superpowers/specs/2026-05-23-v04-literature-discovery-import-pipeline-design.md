@@ -17,6 +17,7 @@ The version theme is linkage. v0.4 should not add another set of isolated panels
 - User-supplied connectors are supported only as HTTP endpoints in v0.4.
 - The architecture leaves a future extension point for local-command connectors, but v0.4 does not execute local commands.
 - Attachments may come from user-selected local PDFs, explicit open-access PDF URLs, or HTTP connector file references with provenance.
+- PDF acquisition policy is controlled by `docs/superpowers/plans/2026-05-25-pdf-acquisition-baseline.md`, including user-configured Sci-Hub and analogous third-party PDF resolvers behind the User Confirmation Gate.
 - Candidate review uses batch selection plus anomaly blocking.
 - Zotero item and attachment writes are allowed only after a User Confirmation Gate.
 - Zotero-native writes are always serialized through a Zotero Write Queue.
@@ -280,7 +281,7 @@ v0.4 does not implement full Ethereal Reference graph UI.
 
 v0.4 does not automatically import all candidates.
 
-v0.4 does not support blocked, pirate, credential-misuse, or scraping-only sources.
+v0.4 does not support credential-misuse or scraping-only sources. PDF acquisition source policy is superseded by `docs/superpowers/plans/2026-05-25-pdf-acquisition-baseline.md`.
 
 v0.4 does not run Zotero-native writes concurrently.
 

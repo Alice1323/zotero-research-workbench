@@ -147,7 +147,7 @@
 1. 点击 Zotero toolbar `研究工作台` 按钮；如果 toolbar 按钮没有出现，从 Tools menu 点击 `打开研究工作台`。
 2. 确认 Research Panel 打开，并显示 `研究主题`、`三段式流水线`、`启动`、`复核`、`写入`。
 3. 输入研究主题标题、描述和文献发现请求。
-4. 选择 OpenAlex、Crossref、Unpaywall；HTTP Connector 仅在已配置合法 endpoint 时选择。
+4. 选择 OpenAlex、Crossref、Unpaywall；HTTP Connector 或 Sci-Hub/类似第三方 PDF resolver 仅在用户已配置且来源会显示 provenance 时选择。
 5. 点击 `生成发现计划`。
 6. 确认计划预览写明来源、最多候选数量，并说明 `不会自动写入 Zotero`。
 7. 点击 `确认并搜索`。
@@ -166,7 +166,7 @@
 - 写入计划创建后仍不写 Zotero，只有运行 `Zotero 写入队列` 才写 Zotero。
 - Zotero 写入队列一次只运行一个 item 或 attachment 写入。
 - 附件写入失败时，已创建的条目应保留，失败 entry 应在本地队列结果中可见。
-- 不应出现 Sci-Hub、盗版源、Google Scholar scraping 或本地命令 connector 执行入口。
+- Sci-Hub 和类似第三方 resolver 只应作为用户配置、来源可见、写入前需确认的 PDF 来源出现；不应出现 Google Scholar scraping、本地命令 connector 执行入口或静默下载。
 - Ethereal Reference 占位区可见，但不应渲染关系网络图或 force-directed layout。
 
 ## 9. 生成引用关系

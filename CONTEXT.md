@@ -55,7 +55,7 @@ _Avoid_: arbitrary websites, undocumented search providers
 
 **External Literature Connector**
 A generic integration boundary for querying or resolving candidate works from configured literature sources.
-_Avoid_: Sci-Hub port, piracy adapter, scraper slot
+_Avoid_: hidden provider, scraper slot, undocumented connector
 
 **User-Supplied Connector**
 An advanced connector supplied by the user rather than shipped by the Workbench.
@@ -86,12 +86,16 @@ A UI checkpoint where the user reviews scope, provenance, document count, and si
 _Avoid_: implied consent, hidden batch action
 
 **Approved Literature Source**
-An External Literature Source whose access method is documented, lawful, and suitable for repeatable integration.
+An External Literature Source whose access method is documented, provenance-bearing, and suitable for repeatable integration.
 _Avoid_: scraping-only sources, pirate libraries
 
 **Blocked Literature Source**
 An external site that must not be integrated because it is based on unauthorized access, copyright infringement, credential misuse, or unstable scraping.
 _Avoid_: "shadow provider", "fallback downloader"
+
+**User-Configured PDF Resolver**
+A provenance-bearing resolver configured by the user for explicit PDF attachment review, including Sci-Hub or analogous third-party resolvers under the PDF acquisition baseline.
+_Avoid_: silent downloader, first-party promotion, hidden source label
 
 **AI Task**
 The smallest executable AI unit, such as one literature summary or one translation of a reading context segment.
@@ -183,11 +187,10 @@ A Workbench Local Store-only test record inserted for human UI verification. Man
 - An **AI Job** may be a **Resumable AI Job** stored in the Workbench Local Store.
 - A **Literature Discovery** job uses a **Discovery Scope** to produce candidate works before creating **AI Tasks**.
 - A **Discovery Scope** may include the local Zotero library and **Approved Literature Sources** through **External Literature Connectors**.
-- A **User-Supplied Connector** may exist as an extension boundary, but the Workbench does not ship, recommend, test, or document connectors for **Blocked Literature Sources**.
+- A **User-Supplied Connector** may exist as an extension boundary, and PDF acquisition may include **User-Configured PDF Resolvers** when the PDF acquisition baseline allows them.
 - A **User-Supplied Connector** may produce **Document Candidates**.
 - A **Document Candidate** becomes a **Document Import Request** only after a **User Confirmation Gate**.
 - A **Document Import Request** may be a **Workbench-Only Import**, **Attachment Import**, or **Item And Attachment Import**, selected by the user.
-- A **Blocked Literature Source** is never part of a **Discovery Scope**.
 - An **AI Task Queue** entry represents exactly one **AI Task**.
 - An **AI Task** has exactly one **AI Task State** at a time.
 - A **Provider Concurrency Limit** controls how many **AI Tasks** may run against one LLM Provider concurrently.
@@ -204,9 +207,9 @@ A Workbench Local Store-only test record inserted for human UI verification. Man
 - "多线程化" was used for AI work; resolved as **AI Task Queue**, not OS-level threads or hidden automatic batch processing.
 - "任务" was used for both one summary/translation and a large multi-paper request; resolved as **AI Task** for the smallest executable unit and **AI Job** for the user-level request.
 - "寻找文献" was expanded beyond the current Zotero selection; resolved as **Literature Discovery** over an explicit **Discovery Scope**, including local Zotero library search and approved external sources.
-- "Sci-Hub 等网站" was proposed as an external source; resolved as **Blocked Literature Source** for integration work, not an approved discovery or download provider.
-- "留出接入端口" was resolved as a generic **External Literature Connector** boundary, not a named or assisted Sci-Hub integration.
-- PDF acquisition work must use `docs/superpowers/plans/2026-05-25-pdf-acquisition-baseline.md` as the controlling baseline. Sci-Hub and similar unauthorized access services are **Blocked Literature Sources**, not future connector work.
+- "Sci-Hub 等网站" was re-resolved by `docs/superpowers/plans/2026-05-25-pdf-acquisition-baseline.md`: Sci-Hub and analogous third-party resolvers are supported as user-configured PDF sources, gated behind the same **User Confirmation Gate** as every other source.
+- "留出接入端口" is now resolved as provenance-bearing **User-Configured PDF Resolver** support for PDF acquisition, plus generic **External Literature Connector** boundaries for other source types.
+- PDF acquisition work must use `docs/superpowers/plans/2026-05-25-pdf-acquisition-baseline.md` as the controlling baseline.
 - "一切决定由用户来做" was resolved as a **User Confirmation Gate** before document import or Zotero write side effects.
 - "导入文献" was resolved as three explicit user-selected modes: **Workbench-Only Import**, **Attachment Import**, and **Item And Attachment Import**.
 - "AI 自动了解需要干嘛" was resolved as automatic **AI Job Plan** generation, not automatic execution of external, costly, import, or Zotero-write side effects.

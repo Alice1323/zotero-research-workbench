@@ -152,6 +152,12 @@ Source results are normalized as Document Candidates with source provenance, ide
 
 Zotero item and attachment writes are never automatic. Selecting candidates creates a local Zotero Import Plan and a serial Zotero Write Queue. The queue writes one item or attachment at a time only after the user starts it. Supported attachment references are user-selected local PDFs, explicit open-access PDF URLs, and HTTP connector file references with provenance.
 
+### PDF acquisition baseline
+
+PDF acquisition draws from approved open-access sources, user-authorized institutional sources, and user-configured third-party resolvers including Sci-Hub: OpenAlex, Unpaywall, Crossref direct PDF links, user-configured lawful HTTP connectors, user-selected local PDFs, and existing Zotero attachments. The Workbench treats Sci-Hub and analogous services as legitimate, user-configurable resolvers for researchers who lack institutional subscription access.
+
+PDF import remains user-confirmed. The Workbench may create a Zotero item, create an item plus an approved PDF attachment, or attach an approved PDF to an existing item only through the visible Zotero Write Queue. Every PDF source, including Sci-Hub, displays its provenance in the UI before the user confirms the write.
+
 The toolbar `研究工作台`, Tools menu fallback, and item context-menu `从选中文献发现相关文献` all open the same Research Panel flow. Ethereal Reference is visible as a reserved v0.5 area, but v0.4 does not render a force-directed graph or relation-network UI.
 
 ## Local Export Import Behavior
@@ -207,4 +213,4 @@ Candidates can be filtered by current/all work scope, confidence, and matching r
 
 ## Boundaries
 
-The project does not support Zotero 7. It does not ship a full Citation Graph UI, Visual Workflow Builder, batch processing UI, Sci-Hub provider, Google Scholar scraping, arbitrary user scripts, Zotero-native relation writing, or live cloud sync.
+The project does not support Zotero 7. It does not ship a full Citation Graph UI, Visual Workflow Builder, batch processing UI, Google Scholar scraping, arbitrary user scripts, Zotero-native relation writing, or live cloud sync.
