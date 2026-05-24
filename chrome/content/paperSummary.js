@@ -1370,6 +1370,10 @@
         title: candidate.title || "未命名候选文献",
         detail: `来源：${candidate.sourceAdapterId || "未记录"}｜异常：${(candidate.anomalyTags || []).join("、") || "无"}`
       });
+      appendMeta(item, "PDF 状态", candidate.pdfStatusLabel || "未发现 PDF");
+      if (Array.isArray(candidate.pdfSources) && candidate.pdfSources.length) {
+        appendMeta(item, "PDF 来源", candidate.pdfSources.join("、"));
+      }
       if (candidate.quickImportAllowed) {
         item.appendChild(createCandidateSelectionControl(candidate));
       }
@@ -1408,13 +1412,41 @@
     checkbox.className = "zotero-import-candidate";
     checkbox.dataset.candidateId = candidate.id;
     checkbox.dataset.attachmentId = candidate.importableAttachmentIds?.[0] || "";
-    checkbox.dataset.importMode = candidate.importableAttachmentIds?.length
-      ? "zotero-item-plus-attachment"
-      : "zotero-item";
 
     label.appendChild(checkbox);
     label.appendChild(document.createTextNode(" 加入写入计划"));
+    label.appendChild(createZoteroImportModeSelect(candidate));
     return label;
+  }
+
+  function createZoteroImportModeSelect(candidate) {
+    const mode = createHtmlElement("select");
+    mode.className = "zotero-import-mode";
+    mode.dataset.candidateId = candidate.id;
+    mode.dataset.attachmentId = candidate.importableAttachmentIds?.[0] || "";
+    appendSelectOption(mode, "zotero-item", "仅创建 Zotero 条目");
+    if (candidate.importableAttachmentIds?.length) {
+      appendSelectOption(mode, "zotero-item-plus-attachment", "创建条目并附加 PDF");
+      appendSelectOption(mode, "attachment-only", "仅为已有条目补 PDF");
+      mode.value = "zotero-item-plus-attachment";
+    }
+    return mode;
+  }
+
+  function appendMeta(item, label, value) {
+    const node = createHtmlElement("span");
+    node.className = "record-meta";
+    node.textContent = `${label}：${cleanText(value) || "未记录"}`;
+    item.appendChild(node);
+    return node;
+  }
+
+  function appendSelectOption(select, value, label) {
+    const option = createHtmlElement("option");
+    option.value = value;
+    option.textContent = label;
+    select.appendChild(option);
+    return option;
   }
 
   function createZoteroImportPlan() {
@@ -1547,12 +1579,29 @@
   function readZoteroImportSelections() {
     return Array.from(document.querySelectorAll(".zotero-import-candidate"))
       .filter((checkbox) => checkbox.checked)
-      .map((checkbox) => ({
-        candidateId: cleanText(checkbox.dataset.candidateId),
-        importMode: cleanText(checkbox.dataset.importMode) || "zotero-item",
-        attachmentId: cleanText(checkbox.dataset.attachmentId)
-      }))
+      .map((checkbox) => {
+        const candidateId = cleanText(checkbox.dataset.candidateId);
+        const mode = document.querySelector(`.zotero-import-mode[data-candidate-id="${candidateId}"]`);
+        return {
+          candidateId,
+          importMode: cleanText(mode?.value) || "zotero-item",
+          attachmentId: cleanText(mode?.dataset?.attachmentId || checkbox.dataset.attachmentId),
+          ...resolveAttachmentOnlyTarget(mode?.value)
+        };
+      })
       .filter((selection) => selection.candidateId);
+  }
+
+  function resolveAttachmentOnlyTarget(importMode) {
+    if (cleanText(importMode) !== "attachment-only") {
+      return {};
+    }
+    const paper = window.WorkbenchSelectedPaper || readSelectedPaperContext();
+    const normalized = paper ? normalizePaperContext(paper) : null;
+    return {
+      targetZoteroItemKey: cleanText(normalized?.key),
+      targetZoteroItemId: Number(normalized?.id) || null
+    };
   }
 
   function parseConnectorHeaders(value) {
@@ -3403,8 +3452,10 @@
     parseChatCompletionText,
     readSelectedPaperContext,
     readSelectedPaperPdfAttachment,
+    readZoteroImportSelections,
     runLiteratureDiscoverySources,
     runZoteroWriteQueue,
+    renderDocumentCandidateReview,
     renderRecentDrafts,
     renderGraphSeedReviewQueue,
     initializeSegmentedFilters,

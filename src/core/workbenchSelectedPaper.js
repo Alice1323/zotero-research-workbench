@@ -15,6 +15,7 @@ function createWorkbenchSelectedPaperRuntime({ getZotero, console } = {}) {
 
     return items.map((item) =>
       normalizePaperContext({
+        id: item.id,
         key: item.key,
         itemType: item.itemType || item.getField?.("itemType"),
         title: item.getField?.("title"),
@@ -82,6 +83,7 @@ function createWorkbenchSelectedPaperRuntime({ getZotero, console } = {}) {
 function normalizePaperContext(input) {
   const pdfAttachment = input.pdfAttachment || selectBestPdfAttachment(input.pdfAttachments || []);
   return {
+    id: Number(input.id) || null,
     key: cleanText(input.key),
     itemType: cleanText(input.itemType),
     title: cleanText(input.title) || "未命名条目",

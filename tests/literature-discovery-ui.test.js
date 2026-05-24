@@ -80,6 +80,68 @@ test("literature discovery create-plan button gives visible feedback on a real c
   assert.match(preview.textContent, /计划预览：来源/);
 });
 
+test("candidate review rendering exposes PDF status and import modes", () => {
+  const harness = createRuntimeHarness();
+
+  loadPaperSummaryRuntime(harness);
+  harness.window.WorkbenchPaperSummary.renderDocumentCandidateReview({
+    candidates: [
+      {
+        id: "candidate-a",
+        title: "Candidate A",
+        sourceAdapterId: "unpaywall",
+        anomalyTags: [],
+        quickImportAllowed: true,
+        pdfStatusLabel: "可导入 PDF",
+        pdfSources: ["unpaywall"],
+        importableAttachmentIds: ["att-a"]
+      }
+    ],
+    summary: { blockedCount: 0 }
+  });
+
+  const list = harness.document.getElementById("document-candidate-list");
+  assert.match(list.textContent, /PDF 状态：可导入 PDF/);
+  assert.match(list.textContent, /PDF 来源：unpaywall/);
+  assert.match(list.textContent, /仅创建 Zotero 条目/);
+  assert.match(list.textContent, /创建条目并附加 PDF/);
+  assert.match(list.textContent, /仅为已有条目补 PDF/);
+});
+
+test("attachment-only import selections target the selected Zotero item", () => {
+  const harness = createRuntimeHarness();
+  harness.window.WorkbenchSelectedPaper = {
+    id: 123,
+    key: "ABCD1234",
+    title: "Target Paper"
+  };
+  const checkbox = createFakeElement("input");
+  checkbox.checked = true;
+  checkbox.dataset.candidateId = "candidate-a";
+  checkbox.dataset.attachmentId = "att-a";
+  const mode = createFakeElement("select");
+  mode.value = "attachment-only";
+  mode.dataset.candidateId = "candidate-a";
+  mode.dataset.attachmentId = "att-a";
+  harness.document.querySelectorAll = (selector) =>
+    selector === ".zotero-import-candidate" ? [checkbox] : [];
+  harness.document.querySelector = (selector) =>
+    selector === '.zotero-import-mode[data-candidate-id="candidate-a"]' ? mode : null;
+
+  loadPaperSummaryRuntime(harness);
+
+  const selections = JSON.parse(JSON.stringify(harness.window.WorkbenchPaperSummary.readZoteroImportSelections()));
+  assert.deepEqual(selections, [
+    {
+      candidateId: "candidate-a",
+      importMode: "attachment-only",
+      attachmentId: "att-a",
+      targetZoteroItemKey: "ABCD1234",
+      targetZoteroItemId: 123
+    }
+  ]);
+});
+
 function loadPaperSummaryRuntime(harness) {
   const source = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
   vm.runInNewContext(source, harness.context, { filename: "paperSummary.js" });
@@ -377,6 +439,11 @@ function createFakeDocument() {
     },
     createElementNS(_namespace, tagName) {
       return createFakeElement(tagName);
+    },
+    createTextNode(text) {
+      const node = createFakeElement("#text");
+      node.textContent = text;
+      return node;
     },
     querySelector() {
       return null;

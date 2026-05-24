@@ -10,6 +10,7 @@ const root = path.resolve(__dirname, "..");
 
 function createItem({ key = "item-1", fields = {}, creators = [], attachments = [] } = {}) {
   return {
+    id: 42,
     key,
     itemType: fields.itemType || "journalArticle",
     getField(name) {
@@ -50,6 +51,7 @@ test("selected paper runtime reads the first regular Zotero item and normalizes 
   });
 
   assert.deepEqual(runtime.readSelectedPaperContext(), {
+    id: 42,
     key: "ABC123",
     itemType: "journalArticle",
     title: "A Paper",

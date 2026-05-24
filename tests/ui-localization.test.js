@@ -80,6 +80,10 @@ test("research panel exposes Chinese LLM provider settings", () => {
     "批量加入写入计划",
     "异常候选需单独复核",
     "Zotero 写入队列",
+    "PDF 状态",
+    "仅创建 Zotero 条目",
+    "创建条目并附加 PDF",
+    "仅为已有条目补 PDF",
     "Ethereal Reference",
     "关系网络将在 v0.5 启用",
     "成功",
@@ -397,6 +401,8 @@ test("research panel runtime wires v0.4 pipeline skeleton actions", () => {
   assert.match(runtime, /function renderDocumentCandidateReview/);
   assert.match(runtime, /function renderZoteroWriteQueue/);
   assert.match(runtime, /function readLiteratureDiscoverySources/);
+  assert.match(runtime, /pdfStatusLabel/);
+  assert.match(runtime, /attachment-only/);
   assert.match(createPlanBody, /ResearchPanelOrchestrator\.createLiteratureDiscoveryPlanWorkflow/);
   assert.match(createPlanBody, /WorkbenchLiteratureDiscoveryPlan/);
   assert.match(runtime, /recordLiteratureDiscoveryCandidatesTransaction/);
