@@ -75,6 +75,21 @@ test("research panel exposes Chinese LLM provider settings", () => {
     "Crossref",
     "Unpaywall",
     "HTTP Connector",
+    "Sci-Hub JSON Resolver",
+    "Sci-Hub JSON Resolver URL Template",
+    "PDF 获取",
+    "从选中文献、发现候选或 DOI 列表生成可复核 PDF 候选",
+    "查找 PDF 候选",
+    "Sci-PDF Embedded",
+    "Open Access Sources",
+    "Sci-Hub 站点列表",
+    "测试站点",
+    "同步到 Zotero Find Full Text",
+    "高级选项，默认关闭；会影响 Zotero 原生 Find Full Text。",
+    "DOI 数量",
+    "写入策略",
+    "PDF 候选",
+    "加入写入计划前请先复核来源、请求地址和附件类型。",
     "生成发现计划",
     "确认并搜索",
     "批量加入写入计划",
@@ -225,6 +240,27 @@ test("research panel exposes Chinese LLM provider settings", () => {
   ]) {
     assert.match(panel, new RegExp(`id="${id}"`));
   }
+  for (const id of [
+    "workbench-tab-pdf-acquisition",
+    "pdf-acquisition-panel",
+    "pdf-acquisition-find-candidates",
+    "pdf-source-scipdf-enabled",
+    "pdf-source-scipdf-base-urls",
+    "pdf-source-scipdf-test-sites",
+    "pdf-source-open-access-enabled",
+    "pdf-source-scipdf-sync-enabled",
+    "pdf-source-scipdf-sync-zotero",
+    "pdf-acquisition-selected-status",
+    "pdf-acquisition-doi-status",
+    "pdf-acquisition-write-strategy",
+    "pdf-acquisition-candidate-list",
+    "pdf-acquisition-status"
+  ]) {
+    assert.match(panel, new RegExp(`id="${id}"`));
+  }
+  assert.match(panel, /class="workbench-tabs"/);
+  assert.match(panel, /class="pdf-source-card pdf-source-card-primary"/);
+  assert.match(panel, /class="pdf-source-card pdf-source-card-secondary"/);
   assert.match(panel, /id="save-paper-summary-note"/);
   assert.match(panel, /class="primary-action"/);
   assert.match(panel, /id="refresh-reading-context"/);
@@ -403,6 +439,8 @@ test("research panel runtime wires v0.4 pipeline skeleton actions", () => {
   assert.match(runtime, /function readLiteratureDiscoverySources/);
   assert.match(runtime, /pdfStatusLabel/);
   assert.match(runtime, /attachment-only/);
+  assert.match(runtime, /createSciHubResolverAdapter/);
+  assert.match(runtime, /literature-source-sci-hub-resolver/);
   assert.match(createPlanBody, /ResearchPanelOrchestrator\.createLiteratureDiscoveryPlanWorkflow/);
   assert.match(createPlanBody, /WorkbenchLiteratureDiscoveryPlan/);
   assert.match(runtime, /recordLiteratureDiscoveryCandidatesTransaction/);

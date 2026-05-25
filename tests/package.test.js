@@ -96,6 +96,7 @@ test("research panel loads v0.4 core modules before dependent runtime modules", 
 
   assert.ok(indexOfScript("researchTopic.js") >= 0);
   assert.ok(indexOfScript("documentCandidateProtocol.js") >= 0);
+  assert.ok(indexOfScript("scipdfEmbeddedResolver.js") >= 0);
   assert.ok(indexOfScript("literatureDiscovery.js") >= 0);
   assert.ok(indexOfScript("literatureSourceAdapters.js") >= 0);
   assert.ok(indexOfScript("documentCandidateReview.js") >= 0);
@@ -104,6 +105,8 @@ test("research panel loads v0.4 core modules before dependent runtime modules", 
   assert.ok(indexOfScript("etherealReferenceGraph.js") >= 0);
   assert.ok(indexOfScript("researchTopic.js") < indexOfScript("workbenchLocalStoreTransaction.js"));
   assert.ok(indexOfScript("documentCandidateProtocol.js") < indexOfScript("literatureDiscovery.js"));
+  assert.ok(indexOfScript("documentCandidateProtocol.js") < indexOfScript("scipdfEmbeddedResolver.js"));
+  assert.ok(indexOfScript("scipdfEmbeddedResolver.js") < indexOfScript("literatureSourceAdapters.js"));
   assert.ok(indexOfScript("documentCandidateProtocol.js") < indexOfScript("literatureSourceAdapters.js"));
   assert.ok(indexOfScript("literatureDiscovery.js") < indexOfScript("researchPanelOrchestrator.js"));
   assert.ok(indexOfScript("literatureSourceAdapters.js") < indexOfScript("paperSummary.js"));

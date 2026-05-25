@@ -186,6 +186,123 @@
         gap: 4px;
       }
 
+      .workbench-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-block: 8px 10px;
+      }
+
+      .workbench-tab {
+        min-height: 30px;
+        padding-inline: 12px;
+        border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+        border-radius: 6px;
+        background: ButtonFace;
+        color: ButtonText;
+      }
+
+      .workbench-tab[aria-selected="true"] {
+        border-color: Highlight;
+        background: color-mix(in srgb, Highlight 16%, Canvas);
+        color: CanvasText;
+        font-weight: 600;
+      }
+
+      .pdf-acquisition-panel {
+        display: grid;
+        gap: 10px;
+        border-color: color-mix(in srgb, #1f9d55 50%, CanvasText 16%);
+        background: color-mix(in srgb, #1f9d55 5%, Canvas);
+      }
+
+      .pdf-acquisition-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .pdf-acquisition-hero h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .pdf-acquisition-hero p {
+        margin: 3px 0 0;
+        color: color-mix(in srgb, CanvasText 72%, transparent);
+      }
+
+      .pdf-source-grid {
+        display: grid;
+        grid-template-columns: minmax(220px, 1.4fr) minmax(180px, 0.9fr);
+        gap: 10px;
+      }
+
+      .pdf-source-card {
+        display: grid;
+        gap: 8px;
+        padding: 10px;
+        border: 1px solid color-mix(in srgb, CanvasText 16%, transparent);
+        border-radius: 8px;
+        background: Canvas;
+      }
+
+      .pdf-source-card-primary {
+        border-color: color-mix(in srgb, #1f9d55 64%, CanvasText 12%);
+        box-shadow: inset 3px 0 0 #1f9d55;
+      }
+
+      .pdf-source-card-secondary {
+        border-color: color-mix(in srgb, Highlight 28%, CanvasText 12%);
+      }
+
+      .pdf-status-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .pdf-status-cell {
+        display: grid;
+        gap: 2px;
+        min-height: 44px;
+        padding: 8px;
+        border: 1px solid color-mix(in srgb, CanvasText 14%, transparent);
+        border-radius: 6px;
+        background: color-mix(in srgb, CanvasText 4%, Canvas);
+      }
+
+      .pdf-candidate-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .pdf-candidate-row {
+        display: grid;
+        gap: 4px;
+        padding: 8px;
+        border: 1px solid color-mix(in srgb, CanvasText 14%, transparent);
+        border-radius: 6px;
+        background: Canvas;
+      }
+
+      .pdf-write-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding-top: 8px;
+        border-top: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+      }
+
+      @media (max-width: 720px) {
+        .pdf-acquisition-hero,
+        .pdf-source-grid,
+        .pdf-status-strip {
+          grid-template-columns: 1fr;
+        }
+      }
+
       .segmented-filter {
         display: flex;
         flex-wrap: wrap;
@@ -303,6 +420,7 @@
     <script src="workbenchRuntimeStore.js"></script>
     <script src="researchTopic.js"></script>
     <script src="documentCandidateProtocol.js"></script>
+    <script src="scipdfEmbeddedResolver.js"></script>
     <script src="literatureDiscovery.js"></script>
     <script src="literatureSourceAdapters.js"></script>
     <script src="documentCandidateReview.js"></script>
@@ -339,6 +457,75 @@
           <div id="selected-paper-abstract" class="paper-abstract"></div>
         </div>
         <section id="v04-literature-pipeline">
+          <nav class="workbench-tabs" role="tablist" aria-label="研究工作台视图">
+            <button id="workbench-tab-literature-discovery" class="workbench-tab" type="button" role="tab" aria-selected="true" aria-controls="v04-literature-pipeline">文献发现</button>
+            <button id="workbench-tab-pdf-acquisition" class="workbench-tab" type="button" role="tab" aria-selected="true" aria-controls="pdf-acquisition-panel">PDF 获取</button>
+            <button id="workbench-tab-zotero-write" class="workbench-tab" type="button" role="tab" aria-selected="false" aria-controls="zotero-write-queue-list">写入队列</button>
+          </nav>
+          <section id="pdf-acquisition-panel" class="pdf-acquisition-panel" role="tabpanel" aria-labelledby="workbench-tab-pdf-acquisition">
+            <div class="pdf-acquisition-hero">
+              <div>
+                <h2>PDF 获取</h2>
+                <p>从选中文献、发现候选或 DOI 列表生成可复核 PDF 候选</p>
+              </div>
+              <button id="pdf-acquisition-find-candidates" type="button" class="primary-action">查找 PDF 候选</button>
+            </div>
+            <div class="pdf-source-grid">
+              <div class="pdf-source-card pdf-source-card-primary">
+                <label class="checkbox-label">
+                  <input id="pdf-source-scipdf-enabled" type="checkbox" checked="checked" />
+                  <span>Sci-PDF Embedded</span>
+                </label>
+                <label>
+                  <span>Sci-Hub 站点列表</span>
+                  <textarea id="pdf-source-scipdf-base-urls" rows="4">https://sci-hub.se/
+https://sci-hub.st/
+https://sci-hub.ru/</textarea>
+                </label>
+                <div class="actions">
+                  <button id="pdf-source-scipdf-test-sites" type="button">测试站点</button>
+                </div>
+                <label class="checkbox-label">
+                  <input id="pdf-source-scipdf-sync-enabled" type="checkbox" />
+                  <span>同步到 Zotero Find Full Text</span>
+                </label>
+                <span class="status">高级选项，默认关闭；会影响 Zotero 原生 Find Full Text。</span>
+                <button id="pdf-source-scipdf-sync-zotero" type="button">同步到 Zotero Find Full Text</button>
+              </div>
+              <div class="pdf-source-card pdf-source-card-secondary">
+                <label class="checkbox-label">
+                  <input id="pdf-source-open-access-enabled" type="checkbox" checked="checked" />
+                  <span>Open Access Sources</span>
+                </label>
+                <span class="status">复用 OpenAlex、Unpaywall、Crossref 已发现的开放获取 PDF 链接。</span>
+              </div>
+            </div>
+            <div class="pdf-status-strip" aria-live="polite">
+              <div class="pdf-status-cell">
+                <strong>选中文献</strong>
+                <span id="pdf-acquisition-selected-status">未读取</span>
+              </div>
+              <div class="pdf-status-cell">
+                <strong>DOI 数量</strong>
+                <span id="pdf-acquisition-doi-status">0</span>
+              </div>
+              <div class="pdf-status-cell">
+                <strong>写入策略</strong>
+                <span id="pdf-acquisition-write-strategy">先复核候选，再加入 Zotero 写入队列</span>
+              </div>
+            </div>
+            <div class="section-header">
+              <strong>PDF 候选</strong>
+              <span id="pdf-acquisition-status" class="status">加入写入计划前请先复核来源、请求地址和附件类型。</span>
+            </div>
+            <div id="pdf-acquisition-candidate-list" class="pdf-candidate-list" aria-live="polite">
+              <div class="pdf-candidate-row">暂无 PDF 候选</div>
+            </div>
+            <div class="pdf-write-actions">
+              <button id="pdf-acquisition-add-to-write-plan" type="button">批量加入写入计划</button>
+              <span class="status">写入动作与搜索动作分离；执行队列前仍需确认。</span>
+            </div>
+          </section>
           <div class="section-header">
             <strong>研究主题</strong>
             <span class="status">研究主题是文献发现、候选导入、笔记和关系线索的总线。</span>
@@ -394,6 +581,14 @@
             <label class="checkbox-label">
               <input id="literature-source-http-connector" type="checkbox" />
               <span>HTTP Connector</span>
+            </label>
+            <label class="checkbox-label">
+              <input id="literature-source-sci-hub-resolver" type="checkbox" />
+              <span>Sci-Hub JSON Resolver</span>
+            </label>
+            <label>
+              <span>Sci-Hub JSON Resolver URL Template</span>
+              <input id="literature-source-sci-hub-resolver-template" type="text" value="" />
             </label>
           </div>
           <div class="actions">
