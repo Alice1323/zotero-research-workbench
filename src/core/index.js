@@ -14,6 +14,7 @@ const WorkbenchDocumentCandidateProtocol = require("./documentCandidateProtocol"
 const WorkbenchDocumentCandidateReview = require("./documentCandidateReview");
 const WorkbenchLiteratureDiscovery = require("./literatureDiscovery");
 const WorkbenchLiteratureSourceAdapters = require("./literatureSourceAdapters");
+const WorkbenchSciPdfEmbeddedResolver = require("./scipdfEmbeddedResolver");
 const WorkbenchZoteroWriteQueue = require("./zoteroWriteQueue");
 const WorkbenchZoteroItemWriter = require("./zoteroItemWriter");
 const WorkbenchEtherealReferenceGraph = require("./etherealReferenceGraph");
@@ -566,6 +567,7 @@ module.exports = {
   WorkbenchDocumentCandidateReview,
   WorkbenchLiteratureDiscovery,
   WorkbenchLiteratureSourceAdapters,
+  WorkbenchSciPdfEmbeddedResolver,
   WorkbenchZoteroWriteQueue,
   WorkbenchZoteroItemWriter,
   WorkbenchEtherealReferenceGraph,
