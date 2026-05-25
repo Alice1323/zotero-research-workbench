@@ -41,6 +41,11 @@ test("build script exists and documents the runtime package boundary", () => {
   assert.match(script, /researchTopic\.js/);
   assert.match(script, /src\/core\/documentCandidateProtocol\.js/);
   assert.match(script, /documentCandidateProtocol\.js/);
+  assert.match(script, /src\/core\/scipdfEmbeddedResolver\.js/);
+  assert.match(script, /scipdfEmbeddedResolver\.js/);
+  assert.match(script, /vendor\/zotero-scipdf/);
+  assert.match(script, /NOTICE\.md/);
+  assert.match(script, /LICENSE/);
   assert.match(script, /src\/core\/literatureDiscovery\.js/);
   assert.match(script, /literatureDiscovery\.js/);
   assert.match(script, /src\/core\/literatureSourceAdapters\.js/);
@@ -131,6 +136,7 @@ test(
     assert.match(listing, /chrome\/content\/workbenchLocalStoreTransaction\.js/);
     assert.match(listing, /chrome\/content\/researchTopic\.js/);
     assert.match(listing, /chrome\/content\/documentCandidateProtocol\.js/);
+    assert.match(listing, /chrome\/content\/scipdfEmbeddedResolver\.js/);
     assert.match(listing, /chrome\/content\/literatureDiscovery\.js/);
     assert.match(listing, /chrome\/content\/literatureSourceAdapters\.js/);
     assert.match(listing, /chrome\/content\/documentCandidateReview\.js/);
@@ -142,6 +148,11 @@ test(
     assert.match(listing, /chrome\/content\/providerRequestPolicy\.js/);
     assert.match(listing, /chrome\/content\/aiTaskWorkspaceCore\.js/);
     assert.match(listing, /chrome\/content\/aiTaskWorkspace\.js/);
+    assert.match(listing, /vendor\/zotero-scipdf\/README\.md/);
+    assert.match(listing, /vendor\/zotero-scipdf\/NOTICE\.md/);
+    assert.match(listing, /vendor\/zotero-scipdf\/LICENSE/);
+    assert.match(listing, /vendor\/zotero-scipdf\/src\/modules\/CustomResolver\.ts/);
+    assert.match(listing, /vendor\/zotero-scipdf\/src\/modules\/SciHubFetcher\.ts/);
 
     const panel = childProcess.execFileSync(
       "tar",
@@ -157,6 +168,8 @@ test(
     assert.ok(panel.indexOf("workbenchFetchRuntime.js") < panel.indexOf("paperSummary.js"));
     assert.ok(panel.indexOf("researchTopic.js") < panel.indexOf("workbenchLocalStoreTransaction.js"));
     assert.ok(panel.indexOf("documentCandidateProtocol.js") < panel.indexOf("literatureDiscovery.js"));
+    assert.ok(panel.indexOf("documentCandidateProtocol.js") < panel.indexOf("scipdfEmbeddedResolver.js"));
+    assert.ok(panel.indexOf("scipdfEmbeddedResolver.js") < panel.indexOf("literatureSourceAdapters.js"));
     assert.ok(panel.indexOf("documentCandidateProtocol.js") < panel.indexOf("literatureSourceAdapters.js"));
     assert.ok(panel.indexOf("literatureDiscovery.js") < panel.indexOf("researchPanelOrchestrator.js"));
     assert.ok(panel.indexOf("literatureSourceAdapters.js") < panel.indexOf("paperSummary.js"));

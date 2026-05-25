@@ -21,6 +21,7 @@ if (Test-Path $packageDir) {
 
 New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $packageDir "chrome/content") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $packageDir "vendor") | Out-Null
 
 Copy-Item -LiteralPath (Join-Path $projectRoot "manifest.json") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $projectRoot "bootstrap.js") -Destination $packageDir
@@ -35,6 +36,7 @@ Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/workbenchSnapshot.js") 
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/workbenchRuntimeStore.js") -Destination (Join-Path $packageDir "chrome/content/workbenchRuntimeStore.js")
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/researchTopic.js") -Destination (Join-Path $packageDir "chrome/content/researchTopic.js")
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/documentCandidateProtocol.js") -Destination (Join-Path $packageDir "chrome/content/documentCandidateProtocol.js")
+Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/scipdfEmbeddedResolver.js") -Destination (Join-Path $packageDir "chrome/content/scipdfEmbeddedResolver.js")
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/literatureDiscovery.js") -Destination (Join-Path $packageDir "chrome/content/literatureDiscovery.js")
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/literatureSourceAdapters.js") -Destination (Join-Path $packageDir "chrome/content/literatureSourceAdapters.js")
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/documentCandidateReview.js") -Destination (Join-Path $packageDir "chrome/content/documentCandidateReview.js")
@@ -57,6 +59,21 @@ Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/providerRequestPolicy.j
 Copy-Item -LiteralPath (Join-Path $projectRoot "src/core/aiTaskWorkspace.js") -Destination (Join-Path $packageDir "chrome/content/aiTaskWorkspaceCore.js")
 Copy-Item -LiteralPath (Join-Path $projectRoot "chrome/content/aiTaskWorkspace.js") -Destination (Join-Path $packageDir "chrome/content")
 Copy-Item -LiteralPath (Join-Path $projectRoot "chrome/content/paperSummary.js") -Destination (Join-Path $packageDir "chrome/content")
+
+$scipdfVendorRequiredFiles = @(
+  "vendor/zotero-scipdf/README.md",
+  "vendor/zotero-scipdf/NOTICE.md",
+  "vendor/zotero-scipdf/LICENSE",
+  "vendor/zotero-scipdf/src/modules/CustomResolver.ts",
+  "vendor/zotero-scipdf/src/modules/SciHubFetcher.ts"
+)
+foreach ($relativePath in $scipdfVendorRequiredFiles) {
+  $requiredPath = Join-Path $projectRoot $relativePath
+  if (-not (Test-Path $requiredPath)) {
+    throw "Missing required Sci-PDF vendored package file: $relativePath"
+  }
+}
+Copy-Item -LiteralPath (Join-Path $projectRoot "vendor/zotero-scipdf") -Destination (Join-Path $packageDir "vendor") -Recurse
 
 if (Test-Path $xpiPath) {
   Remove-Item -LiteralPath $xpiPath -Force
