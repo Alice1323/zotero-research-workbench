@@ -5,6 +5,12 @@ const DocumentCandidateProtocol =
     : typeof window !== "undefined"
       ? window.WorkbenchDocumentCandidateProtocol
       : null;
+const SciPdfEmbeddedResolver =
+  typeof require === "function"
+    ? require("./scipdfEmbeddedResolver")
+    : typeof window !== "undefined"
+      ? window.WorkbenchSciPdfEmbeddedResolver
+      : null;
 
 const SOURCE_ADAPTER_FETCH_RUNTIME_UNAVAILABLE = "Source adapter fetch runtime unavailable";
 const HTTP_CONNECTOR_PROTOCOL = "zotero-research-workbench.document-candidates.v1";
@@ -95,6 +101,122 @@ function createUnpaywallAdapter({ fetchImpl, baseUrl = "https://api.unpaywall.or
       }
 
       return adapterResult("unpaywall", candidates, failures);
+    }
+  };
+}
+
+function createSciHubResolverAdapter({ fetchImpl, resolverUrlTemplate } = {}) {
+  return {
+    sourceAdapterId: "sci-hub",
+    async query({ dois, observedAt, topicId } = {}) {
+      assertFetchRuntime(fetchImpl);
+      const template = cleanText(resolverUrlTemplate);
+      if (!template) {
+        return adapterResult("sci-hub", [], [
+          createSourceAdapterFailure({
+            sourceAdapterId: "sci-hub",
+            userMessage: "Sci-Hub resolver URL template is required",
+            error: { reason: "missing-resolver-template" }
+          })
+        ]);
+      }
+      const normalizedDois = uniqueClean(dois).map((doi) => normalizeDoi(doi)).filter(Boolean);
+      if (!normalizedDois.length) {
+        return adapterResult("sci-hub", [], [
+          createSourceAdapterFailure({
+            sourceAdapterId: "sci-hub",
+            userMessage: "Sci-Hub resolver requires at least one DOI",
+            error: { reason: "missing-doi" }
+          })
+        ]);
+      }
+
+      const candidates = [];
+      const failures = [];
+      for (const doi of normalizedDois) {
+        const url = buildResolverUrl(template, doi);
+        try {
+          const response = await fetchImpl(url);
+          const failure = createHttpFailureIfNeeded("sci-hub", response);
+          if (failure) {
+            failures.push(failure);
+            continue;
+          }
+          const payload = await response.json();
+          const candidate = normalizeSciHubResolverRecord({ record: payload, doi, url, observedAt, topicId });
+          if (candidate.attachments.length) {
+            candidates.push(candidate);
+          } else {
+            failures.push(createSourceAdapterFailure({
+              sourceAdapterId: "sci-hub",
+              userMessage: "Sci-Hub resolver did not return a PDF URL",
+              error: { requestUrl: url, responseKeys: Object.keys(payload || {}) }
+            }));
+          }
+        } catch (error) {
+          failures.push(createSourceAdapterFailure({ sourceAdapterId: "sci-hub", error }));
+        }
+      }
+      return adapterResult("sci-hub", candidates, failures);
+    }
+  };
+}
+
+function createSciPdfEmbeddedAdapter({ fetchImpl, baseUrls } = {}) {
+  return {
+    sourceAdapterId: "sci-pdf",
+    async query({ dois, selectedItems, documentCandidates, observedAt, topicId } = {}) {
+      assertFetchRuntime(fetchImpl);
+      assertSciPdfRuntime();
+      const normalizedBaseUrls = SciPdfEmbeddedResolver.normalizeSciPdfBaseUrls(baseUrls);
+      if (!normalizedBaseUrls.length) {
+        return adapterResult("sci-pdf", [], [
+          createSourceAdapterFailure({
+            sourceAdapterId: "sci-pdf",
+            userMessage: "Sci-PDF requires at least one valid Sci-PDF site",
+            error: { reason: "missing-base-url" }
+          })
+        ]);
+      }
+
+      const normalizedDois = SciPdfEmbeddedResolver.extractSciPdfDoiValues(
+        dois,
+        selectedItems,
+        documentCandidates
+      );
+      if (!normalizedDois.length) {
+        return adapterResult("sci-pdf", [], [
+          createSourceAdapterFailure({
+            sourceAdapterId: "sci-pdf",
+            userMessage: "Sci-PDF requires at least one DOI",
+            error: { reason: "missing-doi" }
+          })
+        ]);
+      }
+
+      const candidates = [];
+      const failures = [];
+      for (const doi of normalizedDois) {
+        const resolved = await SciPdfEmbeddedResolver.resolveSciPdfDoi({
+          doi,
+          baseUrls: normalizedBaseUrls,
+          fetchImpl
+        });
+        if (resolved.pdfUrl) {
+          candidates.push(normalizeSciPdfEmbeddedRecord({ resolved, observedAt, topicId }));
+          continue;
+        }
+        failures.push(createSourceAdapterFailure({
+          sourceAdapterId: "sci-pdf",
+          userMessage: "Sci-PDF did not find a PDF for DOI",
+          error: {
+            doi,
+            failures: resolved.failures
+          }
+        }));
+      }
+
+      return adapterResult("sci-pdf", candidates, failures);
     }
   };
 }
@@ -317,6 +439,86 @@ function normalizeUnpaywallRecord({ record, doi, url, observedAt, topicId } = {}
   });
 }
 
+function normalizeSciHubResolverRecord({ record, doi, url, observedAt, topicId } = {}) {
+  const pdfUrl = cleanText(record?.pdfUrl || record?.url || record?.fileUrl);
+  const sourceUrl = cleanText(record?.sourceUrl || record?.landingPageUrl || record?.requestUrl);
+  return normalizeDocumentCandidate({
+    sourceAdapterId: "sci-hub",
+    sourceRecordId: normalizeDoi(record?.doi || doi),
+    title: cleanText(record?.title) || `Sci-Hub PDF ${normalizeDoi(doi)}`,
+    authors: Array.isArray(record?.authors) ? record.authors : [],
+    year: cleanNumberishText(record?.year),
+    doi: normalizeDoi(record?.doi || doi),
+    publicationTitle: cleanText(record?.publicationTitle || record?.journalTitle),
+    stableUrl: normalizeDoi(record?.doi || doi) ? `https://doi.org/${normalizeDoi(record?.doi || doi)}` : "",
+    openAccessStatus: cleanText(record?.openAccessStatus || record?.oaStatus),
+    attachments: pdfUrl
+      ? [
+          {
+            kind: "sci-hub-resolved-url",
+            url: pdfUrl,
+            license: cleanText(record?.license),
+            provenance: { source: "sci-hub", sourceUrl, requestUrl: url }
+          }
+        ]
+      : [],
+    provenance: { source: "sci-hub", sourceUrl, requestUrl: url },
+    rawSourcePayload: {
+      sciHub: {
+        doi: normalizeDoi(record?.doi || doi),
+        sourceUrl,
+        hasPdfUrl: Boolean(pdfUrl)
+      }
+    },
+    topicId: cleanText(topicId),
+    observedAt
+  });
+}
+
+function assertSciPdfRuntime() {
+  if (!SciPdfEmbeddedResolver) {
+    throw new Error("Sci-PDF embedded resolver runtime unavailable");
+  }
+}
+
+function normalizeSciPdfEmbeddedRecord({ resolved, observedAt, topicId } = {}) {
+  const doi = SciPdfEmbeddedResolver.normalizeDoi(resolved?.doi);
+  return normalizeDocumentCandidate({
+    sourceAdapterId: "sci-pdf",
+    sourceRecordId: doi,
+    title: `Sci-PDF PDF ${doi}`,
+    doi,
+    stableUrl: doi ? `https://doi.org/${doi}` : "",
+    openAccessStatus: "unknown",
+    topicId: cleanText(topicId),
+    provenance: {
+      source: "sci-pdf",
+      sourceAdapterId: "sci-pdf",
+      sourceUrl: cleanText(resolved?.requestUrl),
+      requestUrl: cleanText(resolved?.requestUrl),
+      upstream: "syt2/zotero-scipdf@af4a838"
+    },
+    attachments: [
+      {
+        kind: "sci-hub-resolved-url",
+        url: cleanText(resolved?.pdfUrl),
+        contentType: "application/pdf",
+        license: "unknown",
+        provenance: {
+          source: "sci-pdf",
+          sourceAdapterId: "sci-pdf",
+          sourceUrl: cleanText(resolved?.requestUrl),
+          requestUrl: cleanText(resolved?.requestUrl),
+          resolverMode: cleanText(resolved?.resolver?.mode) || "html",
+          selector: cleanText(resolved?.resolver?.selector) || "#pdf",
+          upstream: "syt2/zotero-scipdf@af4a838"
+        }
+      }
+    ],
+    observedAt
+  });
+}
+
 function normalizeHttpConnectorCandidate({ candidate, endpointUrl, observedAt, topicId } = {}) {
   return normalizeDocumentCandidate({
     ...clonePlain(candidate || {}),
@@ -490,6 +692,14 @@ function trimTrailingSlash(value) {
   return cleanText(value).replace(/\/+$/, "");
 }
 
+function buildResolverUrl(template, doi) {
+  const normalizedDoi = normalizeDoi(doi);
+  if (template.includes("{doi}")) {
+    return template.replace(/\{doi\}/g, encodeURIComponent(normalizedDoi));
+  }
+  return `${trimTrailingSlash(template)}/${encodeURIComponent(normalizedDoi)}`;
+}
+
 function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -515,6 +725,8 @@ const WorkbenchLiteratureSourceAdapters = {
   createCrossrefAdapter,
   createHttpConnectorAdapter,
   createOpenAlexAdapter,
+  createSciHubResolverAdapter,
+  createSciPdfEmbeddedAdapter,
   createSourceAdapterFailure,
   createUnpaywallAdapter,
   normalizeDoi,

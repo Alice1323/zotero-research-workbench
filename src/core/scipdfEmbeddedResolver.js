@@ -374,6 +374,7 @@ const WorkbenchSciPdfEmbeddedResolver = {
   extractSciPdfPdfUrlFromHtml,
   isSciPdfNotFoundHtml,
   mergeSciPdfResolvers,
+  normalizeDoi,
   normalizeSciPdfBaseUrls,
   normalizeSciPdfBaseUrl,
   parseSciPdfResolverPref,

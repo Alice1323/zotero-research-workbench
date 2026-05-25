@@ -62,6 +62,24 @@ test("normalizeAttachmentReference accepts sci-hub as a user-configured resolver
   assert.equal(attachment.kind, "sci-hub-resolved-url");
 });
 
+test("normalizeAttachmentReference accepts embedded Sci-PDF provenance", () => {
+  const attachment = normalizeAttachmentReference({
+    kind: "sci-hub-resolved-url",
+    url: "https://sci-hub.se/downloads/example.pdf",
+    provenance: {
+      source: "sci-pdf",
+      sourceAdapterId: "sci-pdf",
+      requestUrl: "https://sci-hub.se/10.1000/example",
+      resolverMode: "html",
+      selector: "#pdf"
+    }
+  });
+
+  assert.equal(attachment.importable, true);
+  assert.equal(attachment.provenance.source, "sci-pdf");
+  assert.equal(attachment.kind, "sci-hub-resolved-url");
+});
+
 test("normalizeDocumentCandidate marks missing identity and unclear attachments", () => {
   const candidate = normalizeDocumentCandidate({
     sourceAdapterId: "connector-a",
