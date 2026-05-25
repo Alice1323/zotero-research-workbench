@@ -93,6 +93,12 @@ test("build script exists and documents the runtime package boundary", () => {
   assert.match(readme, /导入工作台状态/);
   assert.match(readme, /API 密钥/);
   assert.match(readme, /WebDAV 密码/);
+  assert.match(readme, /Sci-PDF Embedded/);
+  assert.match(readme, /PDF 获取/);
+  assert.match(readme, /AGPL-3\.0-or-later/);
+  assert.match(readme, /不会静默下载或附加 PDF/);
+  assert.match(readme, /同步到 Zotero Find Full Text/);
+  assert.match(readme, /默认关闭/);
 });
 
 test("research panel loads v0.4 core modules before dependent runtime modules", () => {

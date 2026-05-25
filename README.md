@@ -158,6 +158,21 @@ PDF acquisition draws from approved open-access sources, user-authorized institu
 
 PDF import remains user-confirmed. The Workbench may create a Zotero item, create an item plus an approved PDF attachment, or attach an approved PDF to an existing item only through the visible Zotero Write Queue. Every PDF source, including Sci-Hub, displays its provenance in the UI before the user confirms the write.
 
+## PDF 获取与 Sci-PDF Embedded
+
+`PDF 获取` is the dedicated PDF acquisition entry in the Research Panel. It builds reviewable PDF candidates from the current Zotero selection, known discovery candidates, and DOI values, then displays source, attachment type, importability, license, source URL, request URL, and resolver selector in the candidate rows.
+
+`Sci-PDF Embedded` uses resolver behavior from `syt2/zotero-scipdf` commit `af4a838` as an embedded dependency reference. The vendored snapshot in `vendor/zotero-scipdf` preserves the `AGPL-3.0-or-later` license and notice materials. Workbench runtime code calls the owned boundary in `src/core/scipdfEmbeddedResolver.js`; it does not execute Sci-PDF's original Zotero plugin startup lifecycle.
+
+Default boundaries:
+
+- 不会静默下载或附加 PDF。
+- It does not write Zotero global `extensions.zotero.findPDFs.resolvers` during plugin startup or default panel rendering.
+- It does not auto-register Sci-PDF's original right-click menu.
+- PDF writes still require candidate review and the Zotero Write Queue.
+
+The advanced `同步到 Zotero Find Full Text` action is 默认关闭. Workbench writes Sci-PDF-style resolver entries to Zotero's native Find Full Text resolver preference only after the user enables that checkbox in `PDF 获取` and clicks the sync button.
+
 The toolbar `研究工作台`, Tools menu fallback, and item context-menu `从选中文献发现相关文献` all open the same Research Panel flow. Ethereal Reference is visible as a reserved v0.5 area, but v0.4 does not render a force-directed graph or relation-network UI.
 
 ## Local Export Import Behavior
