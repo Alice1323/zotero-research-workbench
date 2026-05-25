@@ -1325,6 +1325,35 @@
     setText("pdf-acquisition-status", `PDF 候选 ${candidates.length}｜来源失败 ${failures.length}`);
   }
 
+  function syncSciPdfResolversToZoteroFindFullText() {
+    const settings = readPdfAcquisitionSettings();
+    if (!settings.syncToZoteroFindFullText) {
+      setText("pdf-acquisition-status", "请先开启同步到 Zotero Find Full Text");
+      return;
+    }
+    const resolverModule = window.WorkbenchSciPdfEmbeddedResolver;
+    if (!resolverModule) {
+      setText("pdf-acquisition-status", "Sci-PDF resolver runtime 不可用");
+      return;
+    }
+    const zotero = getZotero();
+    if (!zotero?.Prefs?.get || !zotero?.Prefs?.set) {
+      setText("pdf-acquisition-status", "Zotero Prefs runtime 不可用");
+      return;
+    }
+
+    const existing = resolverModule.parseSciPdfResolverPref(
+      zotero.Prefs.get("extensions.zotero.findPDFs.resolvers") || ""
+    );
+    const incoming = resolverModule.createSciPdfCustomResolvers(settings.sciPdfBaseUrls, { automatic: false });
+    const merged = resolverModule.mergeSciPdfResolvers(existing, incoming);
+    zotero.Prefs.set(
+      "extensions.zotero.findPDFs.resolvers",
+      resolverModule.serializeSciPdfResolverPref(merged)
+    );
+    setText("pdf-acquisition-status", `已同步 ${incoming.length} 个 Sci-PDF resolver 到 Zotero Find Full Text`);
+  }
+
   async function runLiteratureDiscoverySources() {
     let shouldRestoreButton = false;
     try {
@@ -3573,6 +3602,9 @@
       const resolver = window.WorkbenchSciPdfEmbeddedResolver;
       const validUrls = resolver ? resolver.normalizeSciPdfBaseUrls(settings.sciPdfBaseUrls) : [];
       setText("pdf-acquisition-status", `Sci-PDF 站点 ${validUrls.length} 个可用配置`);
+    });
+    getField("pdf-source-scipdf-sync-zotero")?.addEventListener("click", () => {
+      syncSciPdfResolversToZoteroFindFullText();
     });
   }
 

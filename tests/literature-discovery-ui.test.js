@@ -168,6 +168,39 @@ test("PDF acquisition default rendering does not sync Zotero Find Full Text reso
   assert.equal(harness.document.getElementById("pdf-source-scipdf-sync-enabled").checked, false);
 });
 
+test("PDF acquisition sync writes Zotero Find Full Text resolvers only after explicit action", () => {
+  const harness = createRuntimeHarness();
+  harness.document.getElementById("pdf-source-scipdf-base-urls").value = "https://sci-hub.se/";
+  harness.document.getElementById("pdf-source-scipdf-sync-enabled").checked = true;
+
+  loadPaperSummaryRuntime(harness);
+  harness.document.fireDOMContentLoaded();
+  assert.equal(harness.prefs.has("extensions.zotero.findPDFs.resolvers"), false);
+
+  harness.document.getElementById("pdf-source-scipdf-sync-zotero").click();
+
+  const raw = harness.prefs.get("extensions.zotero.findPDFs.resolvers");
+  const resolvers = JSON.parse(raw);
+  assert.equal(resolvers.length, 1);
+  assert.equal(resolvers[0].name, "Sci-Hub");
+  assert.equal(resolvers[0].url, "https://sci-hub.se/{doi}");
+  assert.equal(resolvers[0].automatic, false);
+  assert.equal(harness.document.getElementById("pdf-acquisition-status").textContent, "已同步 1 个 Sci-PDF resolver 到 Zotero Find Full Text");
+});
+
+test("PDF acquisition sync refuses to write when advanced checkbox is off", () => {
+  const harness = createRuntimeHarness();
+  harness.document.getElementById("pdf-source-scipdf-base-urls").value = "https://sci-hub.se/";
+  harness.document.getElementById("pdf-source-scipdf-sync-enabled").checked = false;
+
+  loadPaperSummaryRuntime(harness);
+  harness.document.fireDOMContentLoaded();
+  harness.document.getElementById("pdf-source-scipdf-sync-zotero").click();
+
+  assert.equal(harness.prefs.has("extensions.zotero.findPDFs.resolvers"), false);
+  assert.equal(harness.document.getElementById("pdf-acquisition-status").textContent, "请先开启同步到 Zotero Find Full Text");
+});
+
 test("candidate review rendering exposes PDF status and import modes", () => {
   const harness = createRuntimeHarness();
 
@@ -406,6 +439,18 @@ function createWorkbenchRuntimeModules(window) {
       })
     },
     WorkbenchSciPdfEmbeddedResolver: {
+      createSciPdfCustomResolvers: (baseUrls = [], { automatic = false } = {}) =>
+        (Array.isArray(baseUrls) ? baseUrls : [baseUrls])
+          .filter((url) => /^https?:\/\//.test(String(url || "")))
+          .map((url) => ({
+            name: "Sci-Hub",
+            method: "GET",
+            url: `${String(url).replace(/\/+$/, "")}/{doi}`,
+            mode: "html",
+            selector: "#pdf",
+            attribute: "src",
+            automatic
+          })),
       extractSciPdfDoiValues: (...sources) => {
         const dois = [];
         for (const source of sources) {
@@ -413,8 +458,17 @@ function createWorkbenchRuntimeModules(window) {
         }
         return dois;
       },
+      mergeSciPdfResolvers: (existing = [], incoming = []) => [...existing, ...incoming],
       normalizeSciPdfBaseUrls: (baseUrls = []) =>
-        (Array.isArray(baseUrls) ? baseUrls : [baseUrls]).filter((url) => /^https?:\/\//.test(String(url || "")))
+        (Array.isArray(baseUrls) ? baseUrls : [baseUrls]).filter((url) => /^https?:\/\//.test(String(url || ""))),
+      parseSciPdfResolverPref: (value) => {
+        try {
+          return JSON.parse(value || "[]");
+        } catch (_error) {
+          return [];
+        }
+      },
+      serializeSciPdfResolverPref: (resolvers) => JSON.stringify(resolvers)
     },
     WorkbenchLiteratureSourceAdapters: {
       createOpenAlexAdapter: () => createSourceAdapter("openalex"),
