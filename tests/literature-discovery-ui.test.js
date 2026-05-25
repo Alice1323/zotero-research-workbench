@@ -80,6 +80,94 @@ test("literature discovery create-plan button gives visible feedback on a real c
   assert.match(preview.textContent, /计划预览：来源/);
 });
 
+test("Sci-Hub resolver source is created from the configured URL template", async () => {
+  const harness = createRuntimeHarness();
+  harness.document.getElementById("literature-source-openalex").checked = false;
+  harness.document.getElementById("literature-source-crossref").checked = false;
+  harness.document.getElementById("literature-source-unpaywall").checked = false;
+  harness.document.getElementById("literature-source-http-connector").checked = false;
+  harness.document.getElementById("literature-source-sci-hub-resolver").checked = true;
+  harness.document.getElementById("literature-source-sci-hub-resolver-template").value = "https://resolver.example/{doi}";
+
+  loadPaperSummaryRuntime(harness);
+  harness.document.fireDOMContentLoaded();
+  harness.document.getElementById("literature-discovery-create-plan").click();
+  await harness.document.getElementById("literature-discovery-confirm-search").click();
+
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.window.__createdSourceAdapters)), [
+    {
+      sourceAdapterId: "sci-hub",
+      resolverUrlTemplate: "https://resolver.example/{doi}"
+    }
+  ]);
+  assert.deepEqual(harness.window.__queriedSourceAdapters, ["sci-hub"]);
+});
+
+test("Sci-Hub resolver source without a template reports a visible source failure", async () => {
+  const harness = createRuntimeHarness();
+  harness.document.getElementById("literature-source-openalex").checked = false;
+  harness.document.getElementById("literature-source-crossref").checked = false;
+  harness.document.getElementById("literature-source-unpaywall").checked = false;
+  harness.document.getElementById("literature-source-http-connector").checked = false;
+  harness.document.getElementById("literature-source-sci-hub-resolver").checked = true;
+  harness.document.getElementById("literature-source-sci-hub-resolver-template").value = "";
+
+  loadPaperSummaryRuntime(harness);
+  harness.document.fireDOMContentLoaded();
+  harness.document.getElementById("literature-discovery-create-plan").click();
+  await harness.document.getElementById("literature-discovery-confirm-search").click();
+
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.window.__createdSourceAdapters)), [
+    {
+      sourceAdapterId: "sci-hub",
+      resolverUrlTemplate: ""
+    }
+  ]);
+  assert.equal(
+    harness.document.getElementById("document-candidate-review-status").textContent,
+    "候选 0｜来源失败 1"
+  );
+});
+
+test("PDF acquisition tab creates Sci-PDF adapter and renders provenance rows", async () => {
+  const harness = createRuntimeHarness();
+  harness.document.getElementById("pdf-source-scipdf-enabled").checked = true;
+  harness.document.getElementById("pdf-source-open-access-enabled").checked = false;
+  harness.document.getElementById("pdf-source-scipdf-base-urls").value = "https://sci-hub.se/";
+  harness.window.WorkbenchSelectedPaper = {
+    id: 42,
+    key: "ABCD1234",
+    title: "Selected Paper",
+    DOI: "10.1000/pdf-tab"
+  };
+
+  loadPaperSummaryRuntime(harness);
+  harness.document.fireDOMContentLoaded();
+  await harness.document.getElementById("pdf-acquisition-find-candidates").click();
+
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.window.__createdSourceAdapters)), [
+    {
+      sourceAdapterId: "sci-pdf",
+      baseUrls: ["https://sci-hub.se/"]
+    }
+  ]);
+  const listText = harness.document.getElementById("pdf-acquisition-candidate-list").textContent;
+  assert.match(listText, /Sci-PDF/);
+  assert.match(listText, /sci-hub-resolved-url/);
+  assert.match(listText, /source https:\/\/sci-hub\.se\/10\.1000%2Fpdf-tab/);
+  assert.match(listText, /request https:\/\/sci-hub\.se\/10\.1000%2Fpdf-tab/);
+  assert.equal(harness.document.getElementById("pdf-acquisition-status").textContent, "PDF 候选 1｜来源失败 0");
+});
+
+test("PDF acquisition default rendering does not sync Zotero Find Full Text resolvers", () => {
+  const harness = createRuntimeHarness();
+  loadPaperSummaryRuntime(harness);
+  harness.document.fireDOMContentLoaded();
+
+  assert.equal(harness.prefs.has("extensions.zotero.findPDFs.resolvers"), false);
+  assert.equal(harness.document.getElementById("pdf-source-scipdf-sync-enabled").checked, false);
+});
+
 test("candidate review rendering exposes PDF status and import modes", () => {
   const harness = createRuntimeHarness();
 
@@ -94,7 +182,21 @@ test("candidate review rendering exposes PDF status and import modes", () => {
         quickImportAllowed: true,
         pdfStatusLabel: "可导入 PDF",
         pdfSources: ["unpaywall"],
-        importableAttachmentIds: ["att-a"]
+        importableAttachmentIds: ["att-a"],
+        attachments: [
+          {
+            id: "att-a",
+            kind: "sci-hub-resolved-url",
+            url: "https://resolver.example/a.pdf",
+            importable: true,
+            license: "unknown",
+            provenance: {
+              source: "sci-hub",
+              sourceUrl: "https://sci-hub.example/10.1000/a",
+              requestUrl: "https://resolver.example/10.1000%2Fa"
+            }
+          }
+        ]
       }
     ],
     summary: { blockedCount: 0 }
@@ -103,6 +205,12 @@ test("candidate review rendering exposes PDF status and import modes", () => {
   const list = harness.document.getElementById("document-candidate-list");
   assert.match(list.textContent, /PDF 状态：可导入 PDF/);
   assert.match(list.textContent, /PDF 来源：unpaywall/);
+  assert.match(list.textContent, /PDF 详情：sci-hub/);
+  assert.match(list.textContent, /sci-hub-resolved-url/);
+  assert.match(list.textContent, /可导入/);
+  assert.match(list.textContent, /license unknown/);
+  assert.match(list.textContent, /source https:\/\/sci-hub\.example\/10\.1000\/a/);
+  assert.match(list.textContent, /request https:\/\/resolver\.example\/10\.1000%2Fa/);
   assert.match(list.textContent, /仅创建 Zotero 条目/);
   assert.match(list.textContent, /创建条目并附加 PDF/);
   assert.match(list.textContent, /仅为已有条目补 PDF/);
@@ -284,21 +392,81 @@ function createWorkbenchRuntimeModules(window) {
     WorkbenchSelectedPaperRuntime: {
       createBrowserSelectedPaperRuntime: () => ({
         getSelectedRegularItem: () => null,
-        readSelectedPaperContext: () => null,
-        readSelectedPaperContexts: () => [],
+        readSelectedPaperContext: () => window.WorkbenchSelectedPaper || null,
+        readSelectedPaperContexts: () => window.WorkbenchSelectedPaper ? [window.WorkbenchSelectedPaper] : [],
         readSelectedPaperPdfAttachment: () => null
       }),
       normalizePaperContext: (paper = {}) => paper,
       selectBestPdfAttachment: () => null
     },
     WorkbenchLiteratureDiscovery: {
-      mergeDiscoverySourceResults: () => ({ candidates: [], failures: [] })
+      mergeDiscoverySourceResults: (sourceResults = []) => ({
+        candidates: sourceResults.flatMap((result) => result.candidates || []),
+        failures: sourceResults.flatMap((result) => result.failures || [])
+      })
+    },
+    WorkbenchSciPdfEmbeddedResolver: {
+      extractSciPdfDoiValues: (...sources) => {
+        const dois = [];
+        for (const source of sources) {
+          collectHarnessDois(source, dois);
+        }
+        return dois;
+      },
+      normalizeSciPdfBaseUrls: (baseUrls = []) =>
+        (Array.isArray(baseUrls) ? baseUrls : [baseUrls]).filter((url) => /^https?:\/\//.test(String(url || "")))
     },
     WorkbenchLiteratureSourceAdapters: {
       createOpenAlexAdapter: () => createSourceAdapter("openalex"),
       createCrossrefAdapter: () => createSourceAdapter("crossref"),
       createUnpaywallAdapter: () => createSourceAdapter("unpaywall"),
-      createHttpConnectorAdapter: () => createSourceAdapter("http-connector")
+      createHttpConnectorAdapter: () => createSourceAdapter("http-connector"),
+      createSciHubResolverAdapter: ({ resolverUrlTemplate } = {}) => {
+        window.__createdSourceAdapters = [
+          ...(window.__createdSourceAdapters || []),
+          { sourceAdapterId: "sci-hub", resolverUrlTemplate }
+        ];
+        return createSourceAdapter("sci-hub", window, {
+          failure: resolverUrlTemplate ? null : { userMessage: "Sci-Hub resolver URL template is required" }
+        });
+      },
+      createSciPdfEmbeddedAdapter({ baseUrls }) {
+        window.__createdSourceAdapters = [
+          ...(window.__createdSourceAdapters || []),
+          { sourceAdapterId: "sci-pdf", baseUrls }
+        ];
+        return {
+          sourceAdapterId: "sci-pdf",
+          async query({ dois }) {
+            window.__queriedSourceAdapters = [...(window.__queriedSourceAdapters || []), "sci-pdf"];
+            return {
+              sourceAdapterId: "sci-pdf",
+              candidates: [{
+                id: "candidate-scipdf",
+                title: "Sci-PDF Candidate",
+                sourceAdapterId: "sci-pdf",
+                doi: dois[0],
+                attachments: [{
+                  id: "att-scipdf",
+                  kind: "sci-hub-resolved-url",
+                  url: "https://sci-hub.se/downloads/pdf-tab.pdf",
+                  importable: true,
+                  license: "unknown",
+                  provenance: {
+                    source: "sci-pdf",
+                    sourceAdapterId: "sci-pdf",
+                    sourceUrl: `https://sci-hub.se/${encodeURIComponent(dois[0])}`,
+                    requestUrl: `https://sci-hub.se/${encodeURIComponent(dois[0])}`,
+                    resolverMode: "html",
+                    selector: "#pdf"
+                  }
+                }]
+              }],
+              failures: []
+            };
+          }
+        };
+      }
     },
     WorkbenchZoteroWriteQueue: {
       createZoteroWriteQueue: () => ({ id: "queue-a", entries: [] }),
@@ -376,11 +544,55 @@ function createPanelRecords() {
   };
 }
 
-function createSourceAdapter(sourceAdapterId) {
+function createSourceAdapter(sourceAdapterId, window = null, options = {}) {
   return {
     sourceAdapterId,
-    query: async () => ({ sourceAdapterId, candidates: [], failures: [] })
+    query: async () => {
+      if (window) {
+        window.__queriedSourceAdapters = [...(window.__queriedSourceAdapters || []), sourceAdapterId];
+      }
+      if (options.failure) {
+        return { sourceAdapterId, candidates: [], failures: [options.failure] };
+      }
+      return { sourceAdapterId, candidates: [], failures: [] };
+    }
   };
+}
+
+function collectHarnessDois(source, result) {
+  if (!source) {
+    return;
+  }
+  if (Array.isArray(source)) {
+    for (const entry of source) {
+      collectHarnessDois(entry, result);
+    }
+    return;
+  }
+  if (typeof source === "string") {
+    pushHarnessDoi(source, result);
+    return;
+  }
+  if (typeof source !== "object") {
+    return;
+  }
+  for (const field of ["DOI", "doi", "url", "stableUrl", "title", "extra"]) {
+    pushHarnessDoi(source[field], result);
+  }
+  collectHarnessDois(source.attachments, result);
+  collectHarnessDois(source.documentCandidates, result);
+}
+
+function pushHarnessDoi(value, result) {
+  const text = cleanText(value);
+  const match = text.match(/10\.\d{4}\/[-._;()/:a-z0-9]+/i);
+  if (!match) {
+    return;
+  }
+  const doi = match[0].toLowerCase();
+  if (!result.includes(doi)) {
+    result.push(doi);
+  }
 }
 
 function createEmptySnapshot() {
@@ -496,7 +708,7 @@ function createFakeElement(tagName, id = "") {
       listeners.set(eventName, listener);
     },
     click() {
-      listeners.get("click")?.({ type: "click", target: this, currentTarget: this });
+      return listeners.get("click")?.({ type: "click", target: this, currentTarget: this });
     },
     setAttribute(name, value) {
       attributes.set(name, value);

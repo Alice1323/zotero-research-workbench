@@ -140,6 +140,7 @@
   if (!WorkbenchLiteratureSourceAdapters) {
     throw new Error("WorkbenchLiteratureSourceAdapters runtime Module is unavailable");
   }
+  const { createSciPdfEmbeddedAdapter } = WorkbenchLiteratureSourceAdapters;
   const WorkbenchZoteroWriteQueue = window.WorkbenchZoteroWriteQueue;
   if (!WorkbenchZoteroWriteQueue) {
     throw new Error("WorkbenchZoteroWriteQueue runtime Module is unavailable");
@@ -1201,7 +1202,8 @@
       ["literature-source-openalex", "openalex"],
       ["literature-source-crossref", "crossref"],
       ["literature-source-unpaywall", "unpaywall"],
-      ["literature-source-http-connector", "http-connector"]
+      ["literature-source-http-connector", "http-connector"],
+      ["literature-source-sci-hub-resolver", "sci-hub"]
     ]) {
       if (getField(fieldId)?.checked) {
         sources.push(sourceId);
@@ -1215,8 +1217,36 @@
       selectedSources: readLiteratureDiscoverySources(),
       unpaywallEmail: cleanText(getField("literature-source-unpaywall-email")?.value),
       connectorUrl: cleanText(getField("literature-source-http-connector-url")?.value),
-      connectorHeaders: parseConnectorHeaders(getField("literature-source-http-connector-headers")?.value)
+      connectorHeaders: parseConnectorHeaders(getField("literature-source-http-connector-headers")?.value),
+      sciHubResolverUrlTemplate: cleanText(getField("literature-source-sci-hub-resolver-template")?.value)
     };
+  }
+
+  function readPdfAcquisitionSettings() {
+    return {
+      sciPdfEnabled: getField("pdf-source-scipdf-enabled")?.checked !== false,
+      openAccessEnabled: getField("pdf-source-open-access-enabled")?.checked !== false,
+      sciPdfBaseUrls: readMultilineValues("pdf-source-scipdf-base-urls"),
+      syncToZoteroFindFullText: getField("pdf-source-scipdf-sync-enabled")?.checked === true
+    };
+  }
+
+  function readMultilineValues(fieldId) {
+    return String(getField(fieldId)?.value || "")
+      .split(/\r?\n/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  function collectPdfAcquisitionDois(snapshot) {
+    const resolver = window.WorkbenchSciPdfEmbeddedResolver;
+    if (!resolver) {
+      return [];
+    }
+    return resolver.extractSciPdfDoiValues(
+      window.WorkbenchSelectedPaper,
+      snapshot?.documentCandidates || []
+    );
   }
 
   function createSourceAdapters(settings = {}) {
@@ -1243,7 +1273,56 @@
         headers: settings.connectorHeaders || {}
       }));
     }
+    if (selectedSources.includes("sci-hub")) {
+      adapters.push(WorkbenchLiteratureSourceAdapters.createSciHubResolverAdapter({
+        fetchImpl: workbenchFetch,
+        resolverUrlTemplate: settings.sciHubResolverUrlTemplate
+      }));
+    }
     return adapters;
+  }
+
+  function createPdfAcquisitionSourceAdapters(settings) {
+    const adapters = [];
+    if (settings.sciPdfEnabled) {
+      adapters.push(createSciPdfEmbeddedAdapter({
+        fetchImpl: workbenchFetch,
+        baseUrls: settings.sciPdfBaseUrls
+      }));
+    }
+    return adapters;
+  }
+
+  async function findPdfAcquisitionCandidates() {
+    const snapshot = loadWorkbenchSnapshot();
+    const settings = readPdfAcquisitionSettings();
+    const dois = collectPdfAcquisitionDois(snapshot);
+    setText("pdf-acquisition-selected-status", window.WorkbenchSelectedPaper?.title || "未选择文献");
+    setText("pdf-acquisition-doi-status", String(dois.length));
+    if (!dois.length) {
+      setText("pdf-acquisition-status", "未找到 DOI");
+      renderPdfAcquisitionCandidates([]);
+      return;
+    }
+
+    const adapters = createPdfAcquisitionSourceAdapters(settings);
+    const candidates = [];
+    const failures = [];
+    for (const adapter of adapters) {
+      const result = await adapter.query({
+        dois,
+        selectedItems: [window.WorkbenchSelectedPaper].filter(Boolean),
+        documentCandidates: snapshot.documentCandidates || [],
+        observedAt: new Date().toISOString(),
+        topicId: snapshot.researchTopics?.[0]?.id || ""
+      });
+      candidates.push(...(result.candidates || []));
+      failures.push(...(result.failures || []));
+    }
+
+    window.WorkbenchPdfAcquisitionCandidates = candidates;
+    renderPdfAcquisitionCandidates(candidates);
+    setText("pdf-acquisition-status", `PDF 候选 ${candidates.length}｜来源失败 ${failures.length}`);
   }
 
   async function runLiteratureDiscoverySources() {
@@ -1374,11 +1453,91 @@
       if (Array.isArray(candidate.pdfSources) && candidate.pdfSources.length) {
         appendMeta(item, "PDF 来源", candidate.pdfSources.join("、"));
       }
+      renderPdfAttachmentDetails(item, candidate);
       if (candidate.quickImportAllowed) {
         item.appendChild(createCandidateSelectionControl(candidate));
       }
       list.appendChild(item);
     }
+  }
+
+  function renderPdfAttachmentDetails(item, candidate) {
+    const attachments = (Array.isArray(candidate?.attachments) ? candidate.attachments : [])
+      .filter((attachment) =>
+        ["open-access-pdf-url", "local-file", "connector-file-reference", "sci-hub-resolved-url"].includes(
+          cleanText(attachment?.kind)
+        )
+      );
+    for (const attachment of attachments) {
+      const provenance = attachment?.provenance || {};
+      const details = [
+        cleanText(provenance.source || attachment.kind),
+        cleanText(attachment.kind),
+        attachment.importable ? "可导入" : "不可导入",
+        cleanText(attachment.license) ? `license ${cleanText(attachment.license)}` : "",
+        cleanText(provenance.sourceUrl) ? `source ${cleanText(provenance.sourceUrl)}` : "",
+        cleanText(provenance.requestUrl) ? `request ${cleanText(provenance.requestUrl)}` : "",
+        cleanText(attachment.blockReason || attachment.importabilityReason)
+      ].filter(Boolean);
+      appendMeta(item, "PDF 详情", details.join("｜"));
+    }
+  }
+
+  function renderPdfAcquisitionCandidates(candidates) {
+    const list = getField("pdf-acquisition-candidate-list");
+    if (!list) {
+      return;
+    }
+    clearElement(list);
+    const pdfRows = [];
+    for (const candidate of Array.isArray(candidates) ? candidates : []) {
+      for (const attachment of Array.isArray(candidate.attachments) ? candidate.attachments : []) {
+        if (!attachment.kind || (!String(attachment.kind).includes("pdf") && attachment.kind !== "sci-hub-resolved-url")) {
+          continue;
+        }
+        pdfRows.push({ candidate, attachment });
+      }
+    }
+    if (!pdfRows.length) {
+      list.appendChild(createTextRecord("暂无 PDF 候选", "pdf-candidate-row"));
+      return;
+    }
+    for (const row of pdfRows) {
+      list.appendChild(createPdfCandidateRow(row.candidate, row.attachment));
+    }
+  }
+
+  function createPdfCandidateRow(candidate, attachment) {
+    const row = createHtmlElement("div");
+    row.className = "pdf-candidate-row";
+    const title = createHtmlElement("strong");
+    title.textContent = candidate.title || "未命名候选文献";
+    const meta = createHtmlElement("span");
+    meta.className = "record-meta";
+    meta.textContent = [
+      `来源 ${candidate.sourceAdapterId || attachment.provenance?.source || "unknown"}`,
+      attachment.kind,
+      attachment.importable ? "可导入" : `不可导入 ${attachment.importBlockReason || ""}`.trim(),
+      `license ${attachment.license || "unknown"}`
+    ].join("｜");
+    const detail = createHtmlElement("span");
+    detail.className = "record-meta";
+    detail.textContent = [
+      attachment.provenance?.sourceUrl ? `source ${attachment.provenance.sourceUrl}` : "",
+      attachment.provenance?.requestUrl ? `request ${attachment.provenance.requestUrl}` : "",
+      attachment.provenance?.selector ? `selector ${attachment.provenance.selector}` : ""
+    ].filter(Boolean).join("｜");
+    row.appendChild(title);
+    row.appendChild(meta);
+    row.appendChild(detail);
+    return row;
+  }
+
+  function createTextRecord(text, className = "record-item") {
+    const item = createHtmlElement("div");
+    item.className = className;
+    item.textContent = text;
+    return item;
   }
 
   function renderZoteroWriteQueue(readModel) {
@@ -3395,6 +3554,7 @@
     getField("prompt-template-selector").addEventListener("change", loadPromptTemplateEditor);
     getField("prompt-template-save").addEventListener("click", savePromptTemplateOverride);
     getField("prompt-template-reset").addEventListener("click", resetPromptTemplateOverride);
+    bindPdfAcquisitionControls();
     initializeSegmentedFilters();
     loadWebDavSettings();
     loadPromptTemplateEditor();
@@ -3402,6 +3562,18 @@
     renderWorkbenchRecords();
     renderGraphSeedReviewQueue();
     refreshSelectedPaper();
+  }
+
+  function bindPdfAcquisitionControls() {
+    getField("pdf-acquisition-find-candidates")?.addEventListener("click", () => {
+      return findPdfAcquisitionCandidates();
+    });
+    getField("pdf-source-scipdf-test-sites")?.addEventListener("click", () => {
+      const settings = readPdfAcquisitionSettings();
+      const resolver = window.WorkbenchSciPdfEmbeddedResolver;
+      const validUrls = resolver ? resolver.normalizeSciPdfBaseUrls(settings.sciPdfBaseUrls) : [];
+      setText("pdf-acquisition-status", `Sci-PDF 站点 ${validUrls.length} 个可用配置`);
+    });
   }
 
   if (document.readyState === "loading") {
