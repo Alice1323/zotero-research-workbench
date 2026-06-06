@@ -2140,7 +2140,7 @@
     }
     titleRow.appendChild(action);
     const meta = createHtmlElement("span");
-    meta.className = "record-meta";
+    meta.className = "record-meta pdf-candidate-meta";
     meta.textContent = [
       `来源 ${candidate.sourceAdapterId || attachment.provenance?.source || "unknown"}`,
       attachment.kind,
@@ -2148,7 +2148,7 @@
       `license ${attachment.license || "unknown"}`
     ].join("｜");
     const detail = createHtmlElement("span");
-    detail.className = "record-meta";
+    detail.className = "record-meta pdf-candidate-meta";
     detail.textContent = [
       attachment.provenance?.sourceUrl ? `source ${attachment.provenance.sourceUrl}` : "",
       attachment.provenance?.requestUrl ? `request ${attachment.provenance.requestUrl}` : "",

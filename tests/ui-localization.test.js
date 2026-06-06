@@ -356,6 +356,38 @@ test("PDF acquisition defaults put the currently reachable Sci-PDF mirror first"
   assert.equal(firstSite, "https://sci-hub.red/");
 });
 
+test("research panel quick navigation has one initial active target", () => {
+  const panel = fs.readFileSync(path.join(root, "chrome/content/researchPanel.xhtml"), "utf8");
+  const nav = panel.match(/<nav class="workbench-tabs"[\s\S]*?<\/nav>/)?.[0] || "";
+
+  assert.match(nav, /aria-label="研究工作台快速定位"/);
+  assert.doesNotMatch(nav, /role="tablist"/);
+  assert.doesNotMatch(nav, /role="tab"/);
+  assert.doesNotMatch(panel, /role="tabpanel"/);
+  assert.equal((nav.match(/aria-selected="true"/g) || []).length, 1);
+  assert.match(nav, /id="workbench-tab-literature-discovery"[\s\S]*aria-selected="false"/);
+  assert.match(nav, /id="workbench-tab-pdf-acquisition"[\s\S]*aria-selected="true"/);
+});
+
+test("PDF acquisition collapses advanced source and diagnostics details by default", () => {
+  const panel = fs.readFileSync(path.join(root, "chrome/content/researchPanel.xhtml"), "utf8");
+
+  assert.match(panel, /<details class="pdf-config-details">[\s\S]*<summary>Sci-Hub 站点配置<\/summary>[\s\S]*id="pdf-source-scipdf-base-urls"/);
+  assert.match(panel, /<details class="pdf-diagnostics-shell">[\s\S]*<summary>PDF 获取诊断<\/summary>[\s\S]*id="pdf-acquisition-diagnostics"/);
+  assert.doesNotMatch(panel, /<details class="pdf-config-details" open/);
+  assert.doesNotMatch(panel, /<details class="pdf-diagnostics-shell" open/);
+  assert.match(panel, /\.pdf-config-details summary,[\s\S]*\.pdf-diagnostics-shell summary\s*\{[\s\S]*cursor:\s*pointer/);
+});
+
+test("PDF candidate metadata is constrained for long provenance URLs", () => {
+  const panel = fs.readFileSync(path.join(root, "chrome/content/researchPanel.xhtml"), "utf8");
+  const runtime = fs.readFileSync(path.join(root, "chrome/content/paperSummary.js"), "utf8");
+
+  assert.match(panel, /\.pdf-candidate-meta\s*\{[\s\S]*overflow-wrap:\s*anywhere/);
+  assert.match(runtime, /meta\.className = "record-meta pdf-candidate-meta"/);
+  assert.match(runtime, /detail\.className = "record-meta pdf-candidate-meta"/);
+});
+
 test("read-only visual sections expose prominent option help toggles", () => {
   const panel = fs.readFileSync(path.join(root, "chrome/content/researchPanel.xhtml"), "utf8");
 
