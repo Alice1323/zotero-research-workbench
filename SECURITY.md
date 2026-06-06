@@ -19,7 +19,7 @@ Security-sensitive areas include:
 
 ## Supported Versions
 
-The current supported development line is `0.4.0-beta.2` on `master`. Older `v0.1.0` and `v0.2.0` release artifacts are kept for audit and rollback history only.
+The current supported development line is `0.4.0-beta.3` on `master`. Older `v0.1.0` and `v0.2.0` release artifacts are kept for audit and rollback history only.
 
 ## Expected Handling
 

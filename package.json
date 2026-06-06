@@ -1,6 +1,6 @@
 {
   "name": "zotero-research-workbench",
-  "version": "0.4.0-beta.2",
+  "version": "0.4.0-beta.3",
   "description": "Zotero 8/9 research workflow plugin for literature discovery, LLM-assisted notes, and explicit write queues.",
   "private": false,
   "license": "AGPL-3.0-or-later",

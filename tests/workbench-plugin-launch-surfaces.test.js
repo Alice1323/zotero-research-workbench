@@ -83,7 +83,7 @@ test("toolbar button is inserted before Zotero search controls", async () => {
   const win = { document: doc };
   const plugin = new WorkbenchPlugin({
     id: "zotero-research-workbench",
-    version: "0.4.0beta2",
+    version: "0.4.0beta3",
     rootURI: "",
     Zotero: { getMainWindow: () => win, getMainWindows: () => [win] }
   });
@@ -110,7 +110,7 @@ test("toolbar button is inserted before nested Zotero search containers", async 
   const win = { document: doc };
   const plugin = new WorkbenchPlugin({
     id: "zotero-research-workbench",
-    version: "0.4.0beta2",
+    version: "0.4.0beta3",
     rootURI: "",
     Zotero: { getMainWindow: () => win, getMainWindows: () => [win] }
   });
@@ -140,7 +140,7 @@ test("toolbar button is inserted inside the Zotero item action group before the 
   const win = { document: doc };
   const plugin = new WorkbenchPlugin({
     id: "zotero-research-workbench",
-    version: "0.4.0beta2",
+    version: "0.4.0beta3",
     rootURI: "",
     Zotero: { getMainWindow: () => win, getMainWindows: () => [win] }
   });

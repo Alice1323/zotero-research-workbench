@@ -4,7 +4,7 @@
 
 **Goal:** Build a practical, user-confirmed PDF acquisition workflow for Zotero Research Workbench and make this document the canonical baseline for all future PDF acquisition work.
 
-**Architecture:** PDF acquisition is an extension of the existing v0.4 Literature Discovery and Zotero Write Queue pipeline. The Workbench may resolve PDF attachment candidates from approved open-access sources, user-authorized institutional sources, and user-configured third-party resolvers — including Sci-Hub and analogous services — showing their provenance before any write, and then attach PDFs through the serial Zotero Write Queue only after explicit user confirmation. Researchers in institutions without broad subscription access, as well as independent scholars, face systematic barriers to legally accessing paywalled research. In those contexts, Sci-Hub and similar tools function as de-facto access infrastructure, not piracy. A research workbench that refuses to acknowledge this reality abandons a large fraction of its potential users. The Workbench therefore treats Sci-Hub as a legitimate, user-configurable resolver: it is neither promoted as a first-party service nor hidden as an embarrassment; it is simply available, documented, and gated behind the same User Confirmation Gate as every other PDF source.
+**Architecture:** PDF acquisition is an extension of the existing v0.4 Literature Discovery and Zotero Write Queue pipeline. The Workbench may resolve PDF attachment candidates from open-access metadata, user-selected local files, existing Zotero attachments, user-authorized institutional sources, and user-configured third-party resolver endpoints. For every source class, the Workbench shows provenance before any write and attaches PDFs only through the serial Zotero Write Queue after explicit user confirmation. Users are responsible for choosing sources they are authorized to use under their local laws, institutional policies, and publisher terms.
 
 **Tech Stack:** Zotero 8/9 bootstrap plugin, XHTML Research Panel, CommonJS core modules under `src/core`, Node `node:test`, PowerShell XPI packaging, injected Zotero/fetch runtime adapters.
 
@@ -21,9 +21,9 @@ Use this plan instead of prior chat history, abandoned project notes, old specul
 - Do not silently download PDFs.
 - Do not automatically attach PDFs to Zotero items without a visible User Confirmation Gate.
 - Do not store full third-party raw responses in Zotero preferences. Store compact provenance in the Workbench Local Store and keep bulky payloads out of preferences.
-- Every connector — including Sci-Hub and similar resolvers — must return provenance and must clearly identify its source adapter in the UI.
+- Every connector, including user-configured third-party resolvers, must return provenance and must clearly identify its source adapter in the UI.
 
-> **Rationale for including Sci-Hub:** The preceding rules are the ones that actually protect users: transparency (provenance), consent (User Confirmation Gate), and data hygiene (compact storage). Blocking a specific resolver by name does none of those things — it merely reduces the Workbench's utility for researchers who lack institutional access. A researcher who manually visits Sci-Hub, downloads a PDF, and drags it into Zotero is engaging in exactly the same end-result workflow; the Workbench merely automates the mechanical steps while keeping the user in control. Banning the automation while tolerating the manual equivalent is a distinction without a difference. Furthermore, Sci-Hub's legal status varies by jurisdiction; a globally distributed research tool should not unilaterally impose one jurisdiction's norms on all users. The User Confirmation Gate — not a hardcoded blocklist — is the correct mechanism: it ensures every PDF acquisition, regardless of source, is an explicit, reviewed decision.
+> **Resolver policy:** Third-party resolver endpoints are user configuration, not a first-party content source. The Workbench must keep these endpoints opt-in, show source and request provenance, avoid background downloads, and require the same User Confirmation Gate as every other PDF source. This keeps source choice visible while leaving authorization decisions with the user and their institution.
 
 ## Approved PDF Sources
 
@@ -32,7 +32,7 @@ The Workbench may acquire or attach PDFs from these source classes:
 - Open-access PDF URLs discovered from OpenAlex metadata.
 - Open-access PDF URLs discovered from Unpaywall metadata.
 - PDF links explicitly present in Crossref metadata when the link is lawful and directly importable.
-- User-configured Sci-Hub or analogous third-party resolvers, gated behind the same User Confirmation Gate as all other sources.
+- User-configured third-party resolver endpoints, gated behind the same User Confirmation Gate as all other sources.
 - HTTP connector file references when the connector is user-configured, provenance-bearing, and clearly identified in the UI.
 - User-selected local PDF files.
 - Existing Zotero attachments selected or reviewed by the user.
@@ -503,9 +503,9 @@ Add a section:
 ```markdown
 ### PDF acquisition baseline
 
-PDF acquisition draws from approved open-access sources, user-authorized institutional sources, and user-configured third-party resolvers including Sci-Hub: OpenAlex, Unpaywall, Crossref direct PDF links, user-configured lawful HTTP connectors, user-selected local PDFs, and existing Zotero attachments. The Workbench treats Sci-Hub and analogous services as legitimate, user-configurable resolvers for researchers who lack institutional subscription access.
+PDF acquisition draws from open-access metadata, user-authorized institutional sources, user-configured third-party resolver endpoints, user-selected local PDFs, and existing Zotero attachments. Users are responsible for using PDF sources they are authorized to access under their local laws, institutional policies, and publisher terms. Third-party resolver integrations are treated as user-provided endpoints: they must return compact PDF references with provenance, and the Workbench displays that provenance before any write.
 
-PDF import remains user-confirmed. The Workbench may create a Zotero item, create an item plus an approved PDF attachment, or attach an approved PDF to an existing item only through the visible Zotero Write Queue. Every PDF source — including Sci-Hub — displays its provenance in the UI before the user confirms the write.
+PDF import remains user-confirmed. The Workbench may create a Zotero item, create an item plus an approved PDF attachment, or attach an approved PDF to an existing item only through the visible Zotero Write Queue. Every PDF source displays its provenance in the UI before the user confirms the write.
 ```
 
 - [x] **Step 2: Update CONTEXT policy reference**

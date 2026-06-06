@@ -11,8 +11,8 @@ const packagedXpiPath = path.join(root, "dist", `zotero-research-workbench-${man
 test("manifest and package version track v0.4 beta release while preserving v0.3 artifact", () => {
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 
-  assert.equal(manifest.version, "0.4.0beta2");
-  assert.equal(packageJson.version, "0.4.0-beta.2");
+  assert.equal(manifest.version, "0.4.0beta3");
+  assert.equal(packageJson.version, "0.4.0-beta.3");
   assert.equal(fs.existsSync(path.join(root, "dist", "zotero-research-workbench-0.3.0.xpi")), true);
 });
 

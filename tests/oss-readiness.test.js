@@ -36,8 +36,11 @@ test("package and manifest use public beta metadata", () => {
 
 test("README presents neutral PDF acquisition boundaries for public review", () => {
   const readme = readText("README.md");
+  const pdfPlan = readText("docs/superpowers/plans/2026-05-25-pdf-acquisition-baseline.md");
 
   assert.doesNotMatch(readme, /legitimate, user-configurable resolvers/i);
+  assert.doesNotMatch(pdfPlan, /legitimate, user-configurable resolvers/i);
+  assert.doesNotMatch(pdfPlan, /de-facto access infrastructure|not piracy|refuses to acknowledge|Banning the automation|abandons a large fraction/i);
   assert.match(readme, /Users are responsible for using PDF sources they are authorized to access/);
   assert.match(readme, /sideload beta/i);
 });

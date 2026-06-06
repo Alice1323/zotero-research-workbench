@@ -61,7 +61,7 @@ npm run check
 npm run package
 ```
 
-The package command writes `dist/zotero-research-workbench-0.4.0beta2.xpi`.
+The package command writes `dist/zotero-research-workbench-0.4.0beta3.xpi`.
 
 ## First Release QA
 
@@ -76,7 +76,7 @@ Zotero Research Workbench is distributed under `AGPL-3.0-or-later`. Security rep
 
 ## Zotero Sideload Beta Smoke Test
 
-The XPI has been verified against Zotero `9.0.3` in an isolated temporary profile.
+The sideload path has been verified against Zotero `9.0.3` in an isolated temporary profile. The current `0.4.0beta3` XPI is covered by automated package and runtime checks; run the manual QA guide before treating it as a production install.
 
 This project is currently a sideload beta rather than an official Zotero add-on store release. Manual or UI installation is still required for the active Zotero profile because Zotero marks dropped-in sideloaded XPI files as `foreignInstall` and `userDisabled` by default. In an isolated smoke profile, enabling the add-on produced:
 
