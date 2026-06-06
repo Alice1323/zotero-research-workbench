@@ -70,15 +70,19 @@ The package command writes `dist/zotero-research-workbench-0.4.0beta2.xpi`.
 - Project domain glossary for agents: `CONTEXT.md`
 - Local architecture debt issues: `.scratch/architecture-debt/issues/`
 
-## Zotero Smoke Test
+## Open Source Status
+
+Zotero Research Workbench is distributed under `AGPL-3.0-or-later`. Security reporting guidance is in `SECURITY.md`, contribution guidance is in `CONTRIBUTING.md`, and CI runs the Node syntax checks and test suite on push and pull request.
+
+## Zotero Sideload Beta Smoke Test
 
 The XPI has been verified against Zotero `9.0.3` in an isolated temporary profile.
 
-Manual or UI installation is still required for the active Zotero profile because Zotero marks dropped-in sideloaded XPI files as `foreignInstall` and `userDisabled` by default. In an isolated smoke profile, enabling the add-on produced:
+This project is currently a sideload beta rather than an official Zotero add-on store release. Manual or UI installation is still required for the active Zotero profile because Zotero marks dropped-in sideloaded XPI files as `foreignInstall` and `userDisabled` by default. In an isolated smoke profile, enabling the add-on produced:
 
 ```text
-id: zotero-research-workbench@local
-version: 0.2.0
+id: zotero-research-workbench@alice1323.github.io
+version: 0.4.0beta2
 active: True
 userDisabled: False
 appDisabled: False
@@ -154,9 +158,9 @@ Zotero item and attachment writes are never automatic. Selecting candidates crea
 
 ### PDF acquisition baseline
 
-PDF acquisition draws from approved open-access sources, user-authorized institutional sources, and user-configured third-party resolvers including Sci-Hub: OpenAlex, Unpaywall, Crossref direct PDF links, user-configured lawful HTTP connectors, user-selected local PDFs, and existing Zotero attachments. The Workbench treats Sci-Hub and analogous services as legitimate, user-configurable resolvers for researchers who lack institutional subscription access. The current Sci-Hub integration expects a user-configured JSON resolver endpoint, not an arbitrary mirror page; the endpoint should return a compact `pdfUrl`, `url`, or `fileUrl` field with provenance.
+PDF acquisition draws from open-access sources, user-authorized institutional sources, user-configured third-party resolver endpoints, user-selected local PDFs, and existing Zotero attachments. Users are responsible for using PDF sources they are authorized to access under their local laws, institutional policies, and publisher terms. Third-party resolver integrations are treated as user-provided endpoints: they must return a compact `pdfUrl`, `url`, or `fileUrl` field with provenance, and the Workbench displays that provenance before any write.
 
-PDF import remains user-confirmed. The Workbench may create a Zotero item, create an item plus an approved PDF attachment, or attach an approved PDF to an existing item only through the visible Zotero Write Queue. Every PDF source, including Sci-Hub, displays its provenance in the UI before the user confirms the write.
+PDF import remains user-confirmed. The Workbench may create a Zotero item, create an item plus an approved PDF attachment, or attach an approved PDF to an existing item only through the visible Zotero Write Queue. Every PDF source displays its provenance in the UI before the user confirms the write.
 
 ## PDF 获取与 Sci-PDF Embedded
 

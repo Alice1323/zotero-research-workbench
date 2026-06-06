@@ -1,8 +1,26 @@
 {
   "name": "zotero-research-workbench",
   "version": "0.4.0-beta.2",
-  "description": "Zotero 8/9 research workflow plugin scaffold.",
-  "private": true,
+  "description": "Zotero 8/9 research workflow plugin for literature discovery, LLM-assisted notes, and explicit write queues.",
+  "private": false,
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alice1323/zotero-research-workbench.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Alice1323/zotero-research-workbench/issues"
+  },
+  "homepage": "https://github.com/Alice1323/zotero-research-workbench#readme",
+  "keywords": [
+    "zotero",
+    "zotero-plugin",
+    "research-tool",
+    "literature-review",
+    "llm",
+    "openai-compatible",
+    "javascript"
+  ],
   "type": "commonjs",
   "scripts": {
     "test": "node --test tests/*.test.js",

@@ -5,8 +5,7 @@
   "description": "面向 Zotero 8/9 的多篇文献综合与研究笔记工作流插件。",
   "applications": {
     "zotero": {
-      "id": "zotero-research-workbench@local",
-      "update_url": "https://example.invalid/zotero-research-workbench/updates.json",
+      "id": "zotero-research-workbench@alice1323.github.io",
       "strict_min_version": "8.0",
       "strict_max_version": "9.*"
     }

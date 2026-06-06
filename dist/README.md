@@ -13,7 +13,7 @@ Binary and export payloads are intentionally ignored by Git. This README is the 
 | Source `package.json` version | `0.4.0-beta.2` |
 | Source `manifest.json` name | `Zotero 研究工作台` |
 | Source `manifest.json` version | `0.4.0beta2` |
-| Add-on id | `zotero-research-workbench@local` |
+| Add-on id | `zotero-research-workbench@alice1323.github.io` |
 | Zotero compatibility | `8.0` to `9.*` |
 | Build command | `npm run package` |
 | Build staging directory | `dist/package/` |
@@ -65,7 +65,7 @@ These are preview/beta packages. Prefer the plain filename unless intentionally 
 
 | Version | Path | Original filename | Size | Last write time | Entries | SHA256 | Notes |
 | --- | --- | --- | ---: | --- | ---: | --- | --- |
-| `0.4.0beta2` | `zotero-research-workbench-0.4.0beta2.xpi` | `zotero-research-workbench-0.4.0beta2.xpi` | `148091` | `2026-06-06 17:30:47` | `45` | `384F8C7FE48845F158D8596E7778CEBF25C7D58BD39F67B7D09C6B48D8AE0695` | Current v0.4 beta package with selected/batch PDF acquisition, publisher PDF fallback, diagnostics, and write queue recovery. |
+| `0.4.0beta2` | `zotero-research-workbench-0.4.0beta2.xpi` | `zotero-research-workbench-0.4.0beta2.xpi` | `148057` | `2026-06-06 17:55:20` | `45` | `D361E76BFC1CBB68473BB67C059DDF619F1F4495BD5FDBC3FFFC8D3BF8BEBC72` | Current v0.4 beta package with selected/batch PDF acquisition, publisher PDF fallback, diagnostics, write queue recovery, and public add-on metadata. |
 | `0.4.0beta1` | `zotero-research-workbench-0.4.0beta1.xpi` | `zotero-research-workbench-0.4.0beta1.xpi` | `107249` | `2026-05-24 05:26:09` | `35` | `6AC0FC066BF6C36F966AE170A562BFA469D8742E2E6397C2FC1CB33B3B673FE0` | Superseded by `0.4.0beta2`; kept for toolbar placement and icon-button rollback testing. |
 | `0.21.0-beta.1` | `releases/prerelease/0.21.0-beta.1/zotero-research-workbench-0.21.0-beta.1.xpi` | `zotero-research-workbench-0.21.0-beta.1.xpi` | `69959` | `2026-05-22 03:51:32` | `27` | `E575354236EABA58F4FB40F095D2943BEC9BF03E37DDAAC3CFA8E59F6DAC3110` | Preferred prerelease build for this version. |
 | `0.21.0-beta.1` | `releases/prerelease/0.21.0-beta.1/zotero-research-workbench-0.21.0-beta.1-build-20260522T000234.xpi` | `zotero-research-workbench-0.2.0.xpi` | `59718` | `2026-05-22 00:02:34` | `24` | `293E663D0FCE8692F0DF1D6C1DC25611271BA263A8AFAF4FACFE7F75A24EF4EB` | Older duplicate build. Original filename said `0.2.0`, but package manifest says `0.21.0-beta.1`. |
