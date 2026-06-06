@@ -9,7 +9,7 @@ GitHub 仓库名：`Alice1323/zotero-research-workbench`。
 ## 当前状态
 
 - `v0.2.0`、`v0.3.0` 等早期发布产物已保留在 `dist/`。
-- 当前本机主线版本是 `v0.4.0beta1`，对应 XPI 为 `dist/zotero-research-workbench-0.4.0beta1.xpi`。
+- 当前本机主线版本是 `v0.4.0beta2`，对应 XPI 为 `dist/zotero-research-workbench-0.4.0beta2.xpi`。
 - V0.4 文献发现与导入流水线已在本机 `master` 分支实现并打包：研究主题、Document Candidate protocol、OpenAlex/Crossref/Unpaywall/HTTP connector、候选复核、异常阻断、Zotero Write Queue、工具栏入口、右键菜单入口和 Ethereal Reference 预留区。
 - 本机 `master` 曾显示比 `origin/master` 超前提交；继续交接前应重新核对 `git status --short --branch`。
 - 自动化代码检查和 Node 测试是交接前基线；真实 Zotero 工具栏、右键菜单、item/attachment 写入仍需要手动运行时 QA。

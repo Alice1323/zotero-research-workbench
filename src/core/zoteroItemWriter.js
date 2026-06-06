@@ -32,8 +32,13 @@ async function writeZoteroAttachmentFromIntent({ Zotero, intent, parentItemId, p
     throw new Error("无法创建 Zotero 附件");
   }
   const attachment = intent?.attachment || {};
-  const parentItemID = Number(parentItemId || intent?.parentItemId || 0) || undefined;
   const parentKey = cleanText(parentItemKey || intent?.parentItemKey);
+  const parentItemID = resolveParentItemID({
+    Zotero,
+    parentItemId: parentItemId || intent?.parentItemId,
+    parentItemKey: parentKey,
+    libraryId: intent?.libraryId || attachment.libraryId
+  });
 
   if (attachment.kind === "local-file") {
     if (typeof Zotero.Attachments.importFromFile !== "function") {
@@ -47,7 +52,7 @@ async function writeZoteroAttachmentFromIntent({ Zotero, intent, parentItemId, p
     return { zoteroAttachmentKey: cleanText(saved?.key), zoteroAttachmentId: saved?.id || null, parentItemKey: parentKey };
   }
 
-  if (attachment.kind === "open-access-pdf-url" || attachment.kind === "connector-file-reference") {
+  if (["open-access-pdf-url", "connector-file-reference", "sci-hub-resolved-url"].includes(attachment.kind)) {
     if (typeof Zotero.Attachments.importFromURL !== "function") {
       throw new Error("无法创建 Zotero 附件");
     }
@@ -63,12 +68,53 @@ async function writeZoteroAttachmentFromIntent({ Zotero, intent, parentItemId, p
   throw new Error("附件类型不支持");
 }
 
+function resolveParentItemID({ Zotero, parentItemId, parentItemKey, libraryId } = {}) {
+  const explicitId = Number(parentItemId);
+  if (Number.isFinite(explicitId) && explicitId > 0) {
+    return explicitId;
+  }
+  const key = cleanText(parentItemKey);
+  if (!key) {
+    return undefined;
+  }
+  const libraries = [
+    Number(libraryId),
+    Number(Zotero?.Libraries?.userLibraryID)
+  ].filter((value) => Number.isFinite(value) && value > 0);
+  if (typeof Zotero?.Items?.getIDFromLibraryAndKey === "function") {
+    for (const candidateLibraryId of libraries) {
+      const resolvedId = Number(Zotero.Items.getIDFromLibraryAndKey(candidateLibraryId, key));
+      if (Number.isFinite(resolvedId) && resolvedId > 0) {
+        return resolvedId;
+      }
+    }
+  }
+  if (typeof Zotero?.Items?.getByLibraryAndKey === "function") {
+    for (const candidateLibraryId of libraries) {
+      const item = Zotero.Items.getByLibraryAndKey(candidateLibraryId, key);
+      const resolvedId = Number(item?.id);
+      if (Number.isFinite(resolvedId) && resolvedId > 0) {
+        return resolvedId;
+      }
+    }
+  }
+  if (typeof Zotero?.Items?.get === "function") {
+    const item = Zotero.Items.get(key);
+    const resolvedId = Number(item?.id);
+    if (Number.isFinite(resolvedId) && resolvedId > 0) {
+      return resolvedId;
+    }
+  }
+  throw new Error(`未找到目标 Zotero 条目：${key}`);
+}
+
 function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
 const WorkbenchZoteroItemWriter = {
   cleanText,
+  resolveParentItemID,
   writeZoteroAttachmentFromIntent,
   writeZoteroItemFromIntent
 };

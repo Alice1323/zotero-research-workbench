@@ -21,6 +21,7 @@ function createWorkbenchSelectedPaperRuntime({ getZotero, console } = {}) {
         title: item.getField?.("title"),
         abstractNote: item.getField?.("abstractNote"),
         doi: item.getField?.("DOI"),
+        extra: item.getField?.("extra") || item.getField?.("Extra"),
         publicationTitle: item.getField?.("publicationTitle") || item.getField?.("bookTitle"),
         date: item.getField?.("date"),
         creators: item.getCreators?.() || [],
@@ -82,7 +83,8 @@ function createWorkbenchSelectedPaperRuntime({ getZotero, console } = {}) {
 
 function normalizePaperContext(input) {
   const pdfAttachment = input.pdfAttachment || selectBestPdfAttachment(input.pdfAttachments || []);
-  return {
+  const extra = cleanText(input.extra);
+  const context = {
     id: Number(input.id) || null,
     key: cleanText(input.key),
     itemType: cleanText(input.itemType),
@@ -91,9 +93,34 @@ function normalizePaperContext(input) {
     year: cleanText(input.year) || extractYear(input.date),
     publicationTitle: cleanText(input.publicationTitle) || "未记录",
     abstractNote: cleanText(input.abstractNote) || "未记录摘要",
-    doi: cleanText(input.doi) || "未记录",
+    doi: cleanText(input.doi) || extractDoiFromExtra(extra) || "未记录",
     pdfAttachment
   };
+  if (extra) {
+    context.extra = extra;
+  }
+  return context;
+}
+
+function extractDoiFromExtra(extra) {
+  const value = cleanText(extra);
+  if (!value) {
+    return "";
+  }
+  const labelled = value.match(/(?:^|\n)\s*DOI\s*:\s*(10\.\d{4,15}\/[^\s]+)/i);
+  if (labelled) {
+    return normalizeDoi(labelled[1]);
+  }
+  const fallback = value.match(/\b(10\.\d{4,15}\/[^\s]+)/i);
+  return fallback ? normalizeDoi(fallback[1]) : "";
+}
+
+function normalizeDoi(value) {
+  return cleanText(value)
+    .replace(/^doi:\s*/i, "")
+    .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")
+    .replace(/[.,;)\]]+$/, "")
+    .toLowerCase();
 }
 
 function selectBestPdfAttachment(attachments) {

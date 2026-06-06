@@ -61,7 +61,7 @@ npm run check
 npm run package
 ```
 
-The package command writes `dist/zotero-research-workbench-0.4.0beta1.xpi`.
+The package command writes `dist/zotero-research-workbench-0.4.0beta2.xpi`.
 
 ## First Release QA
 
@@ -154,7 +154,7 @@ Zotero item and attachment writes are never automatic. Selecting candidates crea
 
 ### PDF acquisition baseline
 
-PDF acquisition draws from approved open-access sources, user-authorized institutional sources, and user-configured third-party resolvers including Sci-Hub: OpenAlex, Unpaywall, Crossref direct PDF links, user-configured lawful HTTP connectors, user-selected local PDFs, and existing Zotero attachments. The Workbench treats Sci-Hub and analogous services as legitimate, user-configurable resolvers for researchers who lack institutional subscription access.
+PDF acquisition draws from approved open-access sources, user-authorized institutional sources, and user-configured third-party resolvers including Sci-Hub: OpenAlex, Unpaywall, Crossref direct PDF links, user-configured lawful HTTP connectors, user-selected local PDFs, and existing Zotero attachments. The Workbench treats Sci-Hub and analogous services as legitimate, user-configurable resolvers for researchers who lack institutional subscription access. The current Sci-Hub integration expects a user-configured JSON resolver endpoint, not an arbitrary mirror page; the endpoint should return a compact `pdfUrl`, `url`, or `fileUrl` field with provenance.
 
 PDF import remains user-confirmed. The Workbench may create a Zotero item, create an item plus an approved PDF attachment, or attach an approved PDF to an existing item only through the visible Zotero Write Queue. Every PDF source, including Sci-Hub, displays its provenance in the UI before the user confirms the write.
 

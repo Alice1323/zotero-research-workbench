@@ -114,6 +114,61 @@ test("writeZoteroAttachmentFromIntent attaches a URL PDF to an existing Zotero i
   assert.equal(result.parentItemKey, "ABCD1234");
 });
 
+test("writeZoteroAttachmentFromIntent resolves a parent item id from item key", async () => {
+  const calls = [];
+  const Zotero = {
+    Libraries: { userLibraryID: 1 },
+    Items: {
+      getIDFromLibraryAndKey: (libraryId, key) => (libraryId === 1 && key === "ABCD1234" ? 321 : null)
+    },
+    Attachments: {
+      importFromURL: async (input) => {
+        calls.push(input);
+        return { key: "ATTACH1", id: 456 };
+      }
+    }
+  };
+
+  const result = await writeZoteroAttachmentFromIntent({
+    Zotero,
+    intent: {
+      parentItemKey: "ABCD1234",
+      attachment: { kind: "open-access-pdf-url", url: "https://example.org/a.pdf", title: "A PDF" }
+    }
+  });
+
+  assert.equal(calls[0].parentItemID, 321);
+  assert.equal(result.parentItemKey, "ABCD1234");
+});
+
+test("writeZoteroAttachmentFromIntent imports a Sci-Hub resolved URL attachment", async () => {
+  const calls = [];
+  const Zotero = {
+    Attachments: {
+      importFromURL: async (input) => {
+        calls.push(input);
+        return { key: "SCIATTACH", id: 789 };
+      }
+    }
+  };
+
+  const result = await writeZoteroAttachmentFromIntent({
+    Zotero,
+    parentItemId: 123,
+    intent: {
+      attachment: {
+        kind: "sci-hub-resolved-url",
+        url: "https://sci-hub.se/10.1000/example.pdf",
+        title: "Sci-Hub PDF"
+      }
+    }
+  });
+
+  assert.equal(calls[0].url, "https://sci-hub.se/10.1000/example.pdf");
+  assert.equal(calls[0].parentItemID, 123);
+  assert.equal(result.zoteroAttachmentKey, "SCIATTACH");
+});
+
 test("writeZoteroAttachmentFromIntent rejects unsupported attachments", async () => {
   await assert.rejects(
     () =>

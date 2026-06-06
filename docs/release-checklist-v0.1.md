@@ -9,7 +9,7 @@
 - [ ] 当前仓库路径正确：
 
 ```powershell
-cd "C:\Users\44199\水银灯的书库\水银灯的代码库\归档项目\zotero-research-workbench"
+cd "C:\Users\44199\水银灯的书库\水银灯的代码库\归档项目\Zotero项目\zotero-research-workbench"
 git rev-parse --show-toplevel
 ```
 

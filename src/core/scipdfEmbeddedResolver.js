@@ -1,16 +1,22 @@
 (function () {
 const SCI_PDF_PRESET_BASE_URLS = [
+  "https://sci-hub.red/",
+  "https://sci-hub.box/",
+  "https://sci-hub.su/",
+  "https://sci-hub.ru/",
   "https://sci-hub.se/",
   "https://sci-hub.st/",
-  "https://sci-hub.ru/",
-  "https://sci-hub.box/",
-  "https://sci-hub.red/",
   "https://sci-hub.ren/",
-  "https://sci-hub.ee/"
+  "https://sci-hub.ee/",
+  "https://sci-hub.wf/",
+  "https://sci-hub.tf/",
+  "https://sci-hub.pub/",
+  "https://sci-hub.hkvisa.net/"
 ];
 
 const SCI_PDF_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 11_3_1 like Mac OS X) AppleWebKit/603.1.30 (KHTML, like Gecko) Version/10.0 Mobile/14E304 Safari/602.1";
+const SCI_PDF_FETCH_TIMEOUT_MS = 5000;
 
 const DOI_REGEXPS = [
   /doi[\s.:]{0,2}(10\.\d{4}[\d:.\-_/a-z]+)(?:[\s\n"<]|$)/gi,
@@ -163,7 +169,10 @@ function shouldAppendDoi(result, doi) {
 }
 
 function extractSciPdfPdfUrlFromHtml({ html, requestUrl } = {}) {
-  const rawPdfUrl = extractPdfElementAttribute(html, "src");
+  const rawPdfUrl = extractPdfElementAttribute(html, "src") ||
+    extractCitationPdfUrl(html) ||
+    extractApplicationPdfObjectUrl(html) ||
+    extractDownloadPdfUrl(html);
   if (!rawPdfUrl || !cleanText(requestUrl)) {
     return "";
   }
@@ -180,6 +189,7 @@ function extractSciPdfPdfUrlFromHtml({ html, requestUrl } = {}) {
     if (!["https:", "http:"].includes(pdfUrl.protocol)) {
       return "";
     }
+    pdfUrl.hash = "";
     return pdfUrl.href;
   } catch (_error) {
     return "";
@@ -199,8 +209,53 @@ function extractPdfElementAttribute(html, attributeName) {
   return "";
 }
 
+function extractCitationPdfUrl(html) {
+  const text = String(html || "");
+  const tag = text.match(/<meta\b[^>]*\bname\s*=\s*["']citation_pdf_url["'][^>]*>|<meta\b[^>]*\bcontent\s*=\s*["'][^"']+\.pdf[^"']*["'][^>]*\bname\s*=\s*["']citation_pdf_url["'][^>]*>/i)?.[0] || "";
+  if (!tag) {
+    return "";
+  }
+  return decodeHtmlAttribute(extractTagAttribute(tag, "content"));
+}
+
+function extractApplicationPdfObjectUrl(html) {
+  const text = String(html || "");
+  const tags = text.match(/<object\b[^>]*\btype\s*=\s*["']application\/pdf["'][^>]*>|<object\b[^>]*\bdata\s*=\s*["'][^"']+\.pdf[^"']*["'][^>]*>/gi) || [];
+  for (const tag of tags) {
+    const value = decodeHtmlAttribute(extractTagAttribute(tag, "data"));
+    if (isPdfLikeUrl(value)) {
+      return value;
+    }
+  }
+  return "";
+}
+
+function extractDownloadPdfUrl(html) {
+  const text = String(html || "");
+  const tags = text.match(/<a\b[^>]*\bhref\s*=\s*["'][^"']+\.pdf[^"']*["'][^>]*>/gi) || [];
+  for (const tag of tags) {
+    const value = decodeHtmlAttribute(extractTagAttribute(tag, "href"));
+    if (isPdfLikeUrl(value)) {
+      return value;
+    }
+  }
+  return "";
+}
+
+function extractTagAttribute(tag, attributeName) {
+  const attr = String(tag || "").match(new RegExp(`\\b${attributeName}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i"));
+  return cleanText(attr?.[1] || attr?.[2] || attr?.[3]);
+}
+
+function isPdfLikeUrl(value) {
+  return /\.pdf(?:[?#]|$)/i.test(cleanText(value));
+}
+
 function isSciPdfNotFoundHtml(html) {
-  if (extractPdfElementAttribute(html, "src")) {
+  if (extractPdfElementAttribute(html, "src") ||
+      extractCitationPdfUrl(html) ||
+      extractApplicationPdfObjectUrl(html) ||
+      extractDownloadPdfUrl(html)) {
     return false;
   }
   const body = extractBodyHtml(html);
@@ -231,7 +286,8 @@ async function resolveSciPdfDoi({ doi, baseUrls = SCI_PDF_PRESET_BASE_URLS, fetc
     try {
       const response = await fetchImpl(requestUrl, {
         method: resolver.method,
-        headers: { "User-Agent": SCI_PDF_USER_AGENT }
+        headers: { "User-Agent": SCI_PDF_USER_AGENT },
+        timeoutMs: SCI_PDF_FETCH_TIMEOUT_MS
       });
       if (response?.ok === false) {
         failures.push(createFailure("http-error", { requestUrl, status: response?.status, resolver }));

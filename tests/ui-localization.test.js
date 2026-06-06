@@ -78,8 +78,9 @@ test("research panel exposes Chinese LLM provider settings", () => {
     "Sci-Hub JSON Resolver",
     "Sci-Hub JSON Resolver URL Template",
     "PDF 获取",
-    "从选中文献、发现候选或 DOI 列表生成可复核 PDF 候选",
-    "查找 PDF 候选",
+    "优先处理当前选中文献；批量 DOI 需单独触发",
+    "查找当前选中文献 PDF",
+    "批量查找候选 DOI",
     "Sci-PDF Embedded",
     "Open Access Sources",
     "Sci-Hub 站点列表",
@@ -92,7 +93,8 @@ test("research panel exposes Chinese LLM provider settings", () => {
     "加入写入计划前请先复核来源、请求地址和附件类型。",
     "生成发现计划",
     "确认并搜索",
-    "批量加入写入计划",
+    "全部候选加入写入计划",
+    "单条 PDF 可在候选行加入；执行队列前仍需确认。",
     "异常候选需单独复核",
     "Zotero 写入队列",
     "PDF 状态",
@@ -244,6 +246,7 @@ test("research panel exposes Chinese LLM provider settings", () => {
     "workbench-tab-pdf-acquisition",
     "pdf-acquisition-panel",
     "pdf-acquisition-find-candidates",
+    "pdf-acquisition-find-batch-candidates",
     "pdf-source-scipdf-enabled",
     "pdf-source-scipdf-base-urls",
     "pdf-source-scipdf-test-sites",
@@ -342,6 +345,15 @@ test("research panel exposes Chinese LLM provider settings", () => {
   assert.doesNotMatch(panel, />暂无 Citation Relation</);
   assert.doesNotMatch(panel, />共享 Zotero Key</);
   assert.doesNotMatch(panel, /本地 Citation Relation/);
+});
+
+test("PDF acquisition defaults put the currently reachable Sci-PDF mirror first", () => {
+  const panel = fs.readFileSync(path.join(root, "chrome/content/researchPanel.xhtml"), "utf8");
+  const match = panel.match(/<textarea id="pdf-source-scipdf-base-urls" rows="8">([\s\S]*?)<\/textarea>/);
+
+  assert.ok(match, "Sci-PDF site textarea should exist");
+  const firstSite = match[1].trim().split(/\r?\n/)[0];
+  assert.equal(firstSite, "https://sci-hub.red/");
 });
 
 test("read-only visual sections expose prominent option help toggles", () => {

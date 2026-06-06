@@ -19,10 +19,11 @@ const core = require("../src/core");
 
 test("Sci-PDF preset URLs are normalized into Zotero custom resolver shape", () => {
   assert.deepEqual(SCI_PDF_PRESET_BASE_URLS.slice(0, 3), [
-    "https://sci-hub.se/",
-    "https://sci-hub.st/",
-    "https://sci-hub.ru/"
+    "https://sci-hub.red/",
+    "https://sci-hub.box/",
+    "https://sci-hub.su/"
   ]);
+  assert.ok(SCI_PDF_PRESET_BASE_URLS.includes("https://sci-hub.ru/"));
 
   const resolver = createSciPdfCustomResolver("https://sci-hub.se", false);
   assert.deepEqual(resolver, {
@@ -94,6 +95,26 @@ test("Sci-PDF HTML extraction resolves absolute, protocol-relative, root-relativ
   );
 });
 
+test("Sci-PDF HTML extraction resolves current object and citation PDF URL markup", () => {
+  const requestUrl = "https://sci-hub.ru/10.1371/journal.pone.0000308";
+
+  assert.equal(
+    extractSciPdfPdfUrlFromHtml({
+      html: '<meta name="citation_pdf_url" content="/storage/twin/example/piwowar2007.pdf">',
+      requestUrl
+    }),
+    "https://sci-hub.ru/storage/twin/example/piwowar2007.pdf"
+  );
+
+  assert.equal(
+    extractSciPdfPdfUrlFromHtml({
+      html: '<div class="pdf"><object type="application/pdf" data="/storage/twin/example/piwowar2007.pdf#navpanes=0&view=FitH"></object></div>',
+      requestUrl
+    }),
+    "https://sci-hub.ru/storage/twin/example/piwowar2007.pdf"
+  );
+});
+
 test("Sci-PDF not-found detection matches empty body and known messages", () => {
   assert.equal(isSciPdfNotFoundHtml("<html><body>   </body></html>"), true);
   assert.equal(isSciPdfNotFoundHtml("<body>Please try to search again using DOI</body>"), true);
@@ -118,6 +139,7 @@ test("Sci-PDF resolver fetches HTML and returns a resolved PDF record without at
 
   assert.equal(calls[0].url, "https://sci-hub.se/10.1000%2Ffetch");
   assert.equal(calls[0].options.method, "GET");
+  assert.equal(calls[0].options.timeoutMs, 5000);
   assert.match(calls[0].options.headers["User-Agent"], /Mozilla/);
   assert.equal(result.pdfUrl, "https://sci-hub.se/downloads/fetch.pdf");
   assert.equal(result.requestUrl, "https://sci-hub.se/10.1000%2Ffetch");

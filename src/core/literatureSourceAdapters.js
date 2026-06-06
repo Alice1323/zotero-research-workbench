@@ -15,6 +15,9 @@ const SciPdfEmbeddedResolver =
 const SOURCE_ADAPTER_FETCH_RUNTIME_UNAVAILABLE = "Source adapter fetch runtime unavailable";
 const HTTP_CONNECTOR_PROTOCOL = "zotero-research-workbench.document-candidates.v1";
 const SECRET_PLACEHOLDER = "<redacted>";
+const PUBLISHER_PDF_FETCH_TIMEOUT_MS = 10000;
+const PUBLISHER_PDF_CONCURRENCY_LIMIT = 3;
+const SCI_PDF_CONCURRENCY_LIMIT = 3;
 
 function createOpenAlexAdapter({ fetchImpl, baseUrl = "https://api.openalex.org" } = {}) {
   return {
@@ -103,6 +106,100 @@ function createUnpaywallAdapter({ fetchImpl, baseUrl = "https://api.unpaywall.or
       return adapterResult("unpaywall", candidates, failures);
     }
   };
+}
+
+function createPublisherPdfAdapter({ fetchImpl, crossrefBaseUrl = "https://api.crossref.org" } = {}) {
+  return {
+    sourceAdapterId: "publisher-pdf",
+    async query({ dois, observedAt, topicId } = {}) {
+      assertFetchRuntime(fetchImpl);
+      const normalizedDois = uniqueClean(dois).map((doi) => normalizeDoi(doi)).filter(Boolean);
+      if (!normalizedDois.length) {
+        return adapterResult("publisher-pdf", [], [
+          createSourceAdapterFailure({
+            sourceAdapterId: "publisher-pdf",
+            userMessage: "Publisher PDF requires at least one DOI",
+            error: { reason: "missing-doi" }
+          })
+        ]);
+      }
+
+      const results = await mapWithConcurrency(normalizedDois, PUBLISHER_PDF_CONCURRENCY_LIMIT, (doi) =>
+        queryPublisherPdfDoi({
+          doi,
+          crossrefBaseUrl,
+          fetchImpl,
+          observedAt,
+          topicId
+        })
+      );
+      const candidates = results.flatMap((result) => result.candidates);
+      const failures = results.flatMap((result) => result.failures);
+
+      return adapterResult("publisher-pdf", candidates, failures);
+    }
+  };
+}
+
+async function mapWithConcurrency(items, concurrencyLimit, mapper) {
+  const values = Array.isArray(items) ? items : [];
+  const limit = Math.max(1, Math.min(values.length || 1, Math.trunc(Number(concurrencyLimit)) || 1));
+  const results = new Array(values.length);
+  let nextIndex = 0;
+  async function worker() {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(values[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: limit }, () => worker()));
+  return results;
+}
+
+async function queryPublisherPdfDoi({ doi, crossrefBaseUrl, fetchImpl, observedAt, topicId } = {}) {
+  const crossrefUrl = `${trimTrailingSlash(crossrefBaseUrl)}/works/${encodeURIComponent(doi)}`;
+  try {
+    const response = await fetchImpl(crossrefUrl, { timeoutMs: PUBLISHER_PDF_FETCH_TIMEOUT_MS });
+    const failure = createHttpFailureIfNeeded("publisher-pdf", response, { doi, crossrefUrl });
+    if (failure) {
+      return { candidates: [], failures: [failure] };
+    }
+    const payload = await response.json();
+    const item = payload?.message || {};
+    const record = await normalizePublisherPdfRecord({
+      item,
+      doi,
+      crossrefUrl,
+      fetchImpl,
+      observedAt,
+      topicId
+    });
+    const candidate = record.candidate;
+    if (candidate.attachments.length) {
+      return { candidates: [candidate], failures: [] };
+    }
+    return {
+      candidates: [],
+      failures: [createSourceAdapterFailure({
+        sourceAdapterId: "publisher-pdf",
+        userMessage: "Publisher PDF did not find a PDF URL",
+        error: {
+          doi,
+          crossrefUrl,
+          landingUrl: record.landingUrl,
+          publisher: cleanText(item?.publisher),
+          reason: "publisher-pdf-url-missing",
+          ...clonePlain(record.pdfProbe || {})
+        }
+      })]
+    };
+  } catch (error) {
+    return {
+      candidates: [],
+      failures: [createSourceAdapterFailure({ sourceAdapterId: "publisher-pdf", error })]
+    };
+  }
 }
 
 function createSciHubResolverAdapter({ fetchImpl, resolverUrlTemplate } = {}) {
@@ -194,27 +291,32 @@ function createSciPdfEmbeddedAdapter({ fetchImpl, baseUrls } = {}) {
         ]);
       }
 
-      const candidates = [];
-      const failures = [];
-      for (const doi of normalizedDois) {
+      const results = await mapWithConcurrency(normalizedDois, SCI_PDF_CONCURRENCY_LIMIT, async (doi) => {
         const resolved = await SciPdfEmbeddedResolver.resolveSciPdfDoi({
           doi,
           baseUrls: normalizedBaseUrls,
           fetchImpl
         });
         if (resolved.pdfUrl) {
-          candidates.push(normalizeSciPdfEmbeddedRecord({ resolved, observedAt, topicId }));
-          continue;
+          return {
+            candidates: [normalizeSciPdfEmbeddedRecord({ resolved, observedAt, topicId })],
+            failures: []
+          };
         }
-        failures.push(createSourceAdapterFailure({
-          sourceAdapterId: "sci-pdf",
-          userMessage: "Sci-PDF did not find a PDF for DOI",
-          error: {
-            doi,
-            failures: resolved.failures
-          }
-        }));
-      }
+        return {
+          candidates: [],
+          failures: [createSourceAdapterFailure({
+            sourceAdapterId: "sci-pdf",
+            userMessage: "Sci-PDF did not find a PDF for DOI",
+            error: {
+              doi,
+              failures: resolved.failures
+            }
+          })]
+        };
+      });
+      const candidates = results.flatMap((result) => result.candidates);
+      const failures = results.flatMap((result) => result.failures);
 
       return adapterResult("sci-pdf", candidates, failures);
     }
@@ -439,6 +541,48 @@ function normalizeUnpaywallRecord({ record, doi, url, observedAt, topicId } = {}
   });
 }
 
+async function normalizePublisherPdfRecord({ item, doi, crossrefUrl, fetchImpl, observedAt, topicId } = {}) {
+  const normalizedDoi = normalizeDoi(item?.DOI || doi);
+  const resourceUrl = cleanText(item?.resource?.primary?.URL);
+  const landingUrl = derivePublisherLandingUrlFromResource(resourceUrl) || resourceUrl || cleanText(item?.URL);
+  const pdfProbe = await findPublisherPdfUrl({ item, landingUrl, fetchImpl });
+  const pdfUrl = cleanText(pdfProbe?.url || pdfProbe);
+  const candidate = normalizeDocumentCandidate({
+    sourceAdapterId: "publisher-pdf",
+    sourceRecordId: normalizedDoi,
+    title: firstClean(item?.title) || `Publisher PDF ${normalizedDoi}`,
+    authors: (Array.isArray(item?.author) ? item.author : []).map((author) => ({
+      name: cleanText(author?.name || [author?.given, author?.family].filter(Boolean).join(" "))
+    })),
+    year: firstIssuedYear(item?.issued || item?.published || item?.["published-print"] || item?.["published-online"]),
+    doi: normalizedDoi,
+    publicationTitle: firstClean(item?.["container-title"]),
+    stableUrl: landingUrl || (normalizedDoi ? `https://doi.org/${normalizedDoi}` : ""),
+    openAccessStatus: pdfUrl ? "open" : "",
+    attachments: pdfUrl
+      ? [
+          {
+            kind: "open-access-pdf-url",
+            url: pdfUrl,
+            contentType: "application/pdf",
+            provenance: { source: "publisher-pdf", sourceUrl: landingUrl, requestUrl: crossrefUrl }
+          }
+        ]
+      : [],
+    provenance: { source: "publisher-pdf", sourceUrl: landingUrl, requestUrl: crossrefUrl },
+    rawSourcePayload: {
+      crossref: {
+        doi: normalizedDoi,
+        publisher: cleanText(item?.publisher),
+        hasPublisherPdfUrl: Boolean(pdfUrl)
+      }
+    },
+    topicId: cleanText(topicId),
+    observedAt
+  });
+  return { candidate, landingUrl, pdfProbe };
+}
+
 function normalizeSciHubResolverRecord({ record, doi, url, observedAt, topicId } = {}) {
   const pdfUrl = cleanText(record?.pdfUrl || record?.url || record?.fileUrl);
   const sourceUrl = cleanText(record?.sourceUrl || record?.landingPageUrl || record?.requestUrl);
@@ -569,6 +713,369 @@ function assertFetchRuntime(fetchImpl) {
   if (typeof fetchImpl !== "function") {
     throw new Error(SOURCE_ADAPTER_FETCH_RUNTIME_UNAVAILABLE);
   }
+}
+
+async function findPublisherPdfUrl({ item, landingUrl, fetchImpl } = {}) {
+  const linkedPdf = (Array.isArray(item?.link) ? item.link : [])
+    .map((link) => cleanText(link?.URL))
+    .find(isLikelyPdfDownloadUrl);
+  if (linkedPdf) {
+    return { url: linkedPdf, strategy: "crossref-link" };
+  }
+
+  const resourceUrl = cleanText(item?.resource?.primary?.URL);
+  if (isLikelyPdfDownloadUrl(resourceUrl)) {
+    return { url: resourceUrl, strategy: "crossref-resource" };
+  }
+
+  const normalizedLandingUrl = derivePublisherLandingUrlFromResource(resourceUrl) || cleanText(landingUrl);
+  if (!normalizedLandingUrl || !/^https?:\/\//i.test(normalizedLandingUrl)) {
+    return { url: "", landingUrl: normalizedLandingUrl, reason: "missing-landing-url" };
+  }
+  const probe = {
+    url: "",
+    landingUrl: normalizedLandingUrl,
+    landingStatus: "",
+    landingContentType: "",
+    hansChallengeDetected: false,
+    hansChallengeCookieCreated: false,
+    hansChallengeRetried: false,
+    hansRetryStatus: "",
+    hansRetryContentType: "",
+    hansRetryStillChallenge: false,
+    reason: ""
+  };
+  const response = await fetchImpl(normalizedLandingUrl, { timeoutMs: PUBLISHER_PDF_FETCH_TIMEOUT_MS });
+  probe.landingStatus = normalizeFailureStatus(response?.status);
+  const failure = createHttpFailureIfNeeded("publisher-pdf", response, { landingUrl: normalizedLandingUrl });
+  if (failure) {
+    probe.reason = "landing-http-error";
+    return probe;
+  }
+  const contentType = getHeader(response?.headers, "content-type").toLowerCase();
+  probe.landingContentType = contentType;
+  if (contentType.includes("application/pdf")) {
+    return { ...probe, url: normalizedLandingUrl, strategy: "landing-pdf" };
+  }
+  const html = typeof response?.text === "function" ? await response.text() : "";
+  const pdfUrl = await extractPublisherPdfUrlFromHtml({ html, landingUrl: normalizedLandingUrl, fetchImpl });
+  if (pdfUrl) {
+    return { ...probe, url: pdfUrl, strategy: "landing-html" };
+  }
+  const cookie = createHansPublisherChallengeCookie(html);
+  probe.hansChallengeDetected = isHansPublisherChallengeHtml(html);
+  probe.hansChallengeCookieCreated = Boolean(cookie);
+  if (cookie) {
+    probe.hansChallengeRetried = true;
+    const retryResponse = await fetchImpl(normalizedLandingUrl, {
+      timeoutMs: PUBLISHER_PDF_FETCH_TIMEOUT_MS,
+      headers: { Cookie: cookie }
+    });
+    probe.hansRetryStatus = normalizeFailureStatus(retryResponse?.status);
+    const retryFailure = createHttpFailureIfNeeded("publisher-pdf", retryResponse, { landingUrl: normalizedLandingUrl });
+    if (retryFailure) {
+      probe.reason = "hans-retry-http-error";
+      return probe;
+    }
+    const retryContentType = getHeader(retryResponse?.headers, "content-type").toLowerCase();
+    probe.hansRetryContentType = retryContentType;
+    if (retryContentType.includes("application/pdf")) {
+      return { ...probe, url: normalizedLandingUrl, strategy: "hans-retry-pdf" };
+    }
+    const retryHtml = typeof retryResponse?.text === "function" ? await retryResponse.text() : "";
+    probe.hansRetryStillChallenge = isHansPublisherChallengeHtml(retryHtml);
+    const retryPdfUrl = await extractPublisherPdfUrlFromHtml({ html: retryHtml, landingUrl: normalizedLandingUrl, fetchImpl });
+    if (retryPdfUrl) {
+      return { ...probe, url: retryPdfUrl, strategy: "hans-retry-html" };
+    }
+  }
+  probe.reason = "no-pdf-url-in-landing-html";
+  return probe;
+}
+
+function derivePublisherLandingUrlFromResource(resourceUrl) {
+  const text = cleanText(resourceUrl);
+  const ecoVector = text.match(/^(https?:\/\/journals\.eco-vector\.com\/[^/]+\/article\/)downloadSuppFile\/(\d+)\/\d+(?:[/?#]|$)/i);
+  if (ecoVector) {
+    return `${ecoVector[1]}view/${ecoVector[2]}`;
+  }
+  return "";
+}
+
+async function extractPublisherPdfUrlFromHtml({ html, landingUrl, fetchImpl } = {}) {
+  const text = String(html || "");
+  const candidates = [];
+  const anchorRegexp = /<a\b[^>]*\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>([\s\S]*?)<\/a>/gi;
+  let match;
+  while ((match = anchorRegexp.exec(text)) !== null) {
+    const anchorContext = `${match[0]} ${stripHtmlTags(match[4])}`;
+    const href = decodeHtmlAttribute(match[1] || match[2] || match[3]);
+    if (isLikelyPdfDownloadUrl(href)) {
+      const resolved = resolveUrl(href, landingUrl);
+      if (resolved) {
+        candidates.push({
+          url: resolved,
+          score: scorePublisherFileCandidate(anchorContext, resolved)
+        });
+      }
+    }
+  }
+  candidates.sort((left, right) => right.score - left.score);
+  const directCandidate = candidates.map((candidate) => candidate.url).find(Boolean);
+  if (directCandidate) {
+    return directCandidate;
+  }
+  if (typeof fetchImpl === "function") {
+    anchorRegexp.lastIndex = 0;
+    while ((match = anchorRegexp.exec(text)) !== null) {
+      const tag = `${match[0]} ${stripHtmlTags(match[4])}`;
+      const href = decodeHtmlAttribute(match[1] || match[2] || match[3]);
+      const resolved = resolveUrl(href, landingUrl);
+      if (!resolved || !/\bclass\s*=\s*(?:"[^"]*\bfile\b[^"]*"|'[^']*\bfile\b[^']*')/i.test(tag)) {
+        continue;
+      }
+      const directDownloadUrl = derivePublisherDownloadUrlFromFileViewUrl(resolved);
+      if (directDownloadUrl) {
+        candidates.push({
+          url: directDownloadUrl,
+          score: scorePublisherFileCandidate(tag, directDownloadUrl)
+        });
+        continue;
+      }
+      const pdfCandidate = await resolvePublisherFileCandidate(resolved, fetchImpl);
+      if (pdfCandidate.url) {
+        candidates.push({
+          url: pdfCandidate.url,
+          score: scorePublisherFileCandidate(`${tag} ${pdfCandidate.label}`, resolved)
+        });
+      }
+    }
+  }
+  candidates.sort((left, right) => right.score - left.score);
+  return candidates.map((candidate) => candidate.url).find(Boolean) || "";
+}
+
+function derivePublisherDownloadUrlFromFileViewUrl(url) {
+  const text = cleanText(url);
+  if (!text) {
+    return "";
+  }
+  const ecoVector = text.match(/^(https?:\/\/journals\.eco-vector\.com\/[^/]+\/article\/)view\/(\d+)\/(\d+)([/?#].*)?$/i);
+  if (ecoVector) {
+    return `${ecoVector[1]}download/${ecoVector[2]}/${ecoVector[3]}${ecoVector[4] || ""}`;
+  }
+  return "";
+}
+
+async function resolvePublisherFileCandidate(url, fetchImpl) {
+  try {
+    const response = await fetchImpl(url, { timeoutMs: PUBLISHER_PDF_FETCH_TIMEOUT_MS });
+    if (response?.ok === false) {
+      return { url: "", label: "" };
+    }
+    const contentType = getHeader(response?.headers, "content-type").toLowerCase();
+    if (contentType.includes("application/pdf")) {
+      return { url, label: "" };
+    }
+    if (contentType.includes("text/html") && typeof response?.text === "function") {
+      const html = await response.text();
+      return {
+        url: extractDirectPublisherDownloadUrl({ html, landingUrl: url }) || "",
+        label: extractHtmlTitle(html)
+      };
+    }
+    return { url: "", label: "" };
+  } catch (_error) {
+    return { url: "", label: "" };
+  }
+}
+
+function extractHtmlTitle(html) {
+  return cleanText(String(html || "").match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]);
+}
+
+function stripHtmlTags(value) {
+  return decodeHtmlAttribute(String(value || "").replace(/<[^>]*>/g, " "));
+}
+
+function extractDirectPublisherDownloadUrl({ html, landingUrl } = {}) {
+  const text = String(html || "");
+  const attrRegexp = /\b(?:href|src|data)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+  let match;
+  while ((match = attrRegexp.exec(text)) !== null) {
+    const value = decodeHtmlAttribute(match[1] || match[2] || match[3]);
+    if (/\/article\/(?:download|viewFile)\/\d+\/\d+(?:[/?#]|$)/i.test(value)) {
+      return resolveUrl(value, landingUrl);
+    }
+  }
+  return "";
+}
+
+function createHansPublisherChallengeCookie(html) {
+  const text = String(html || "");
+  const arg1 = cleanText(text.match(/\barg1\s*=\s*['"]([0-9a-f]{40})['"]/i)?.[1]);
+  const key = extractHansPublisherChallengeKey(text);
+  const permutationText = text.match(/\bm\s*=\s*\[([^\]]+)\]/i)?.[1] || "";
+  if (!arg1 || !key || !permutationText) {
+    return "";
+  }
+  const permutation = permutationText
+    .split(",")
+    .map((entry) => Number.parseInt(entry.trim(), 16))
+    .filter((entry) => Number.isFinite(entry));
+  if (permutation.length !== arg1.length || key.length !== arg1.length) {
+    return "";
+  }
+  const reordered = [];
+  for (let index = 0; index < arg1.length; index += 1) {
+    const targetIndex = permutation.findIndex((entry) => entry === index + 1);
+    if (targetIndex < 0) {
+      return "";
+    }
+    reordered[targetIndex] = arg1[index];
+  }
+  const source = reordered.join("");
+  let value = "";
+  for (let index = 0; index < source.length && index < key.length; index += 2) {
+    const byte = Number.parseInt(source.slice(index, index + 2), 16) ^ Number.parseInt(key.slice(index, index + 2), 16);
+    if (!Number.isFinite(byte)) {
+      return "";
+    }
+    value += byte.toString(16).padStart(2, "0");
+  }
+  return value ? `acw_sc__v2=${value}` : "";
+}
+
+function isHansPublisherChallengeHtml(html) {
+  const text = String(html || "");
+  return /\barg1\s*=\s*['"][0-9a-f]{40}['"]/i.test(text) || /\bacw_sc__v2\b/i.test(text);
+}
+
+function extractHansPublisherChallengeKey(html) {
+  const indexMatch = String(html || "").match(/\bp\s*=\s*[A-Za-z_$][\w$]*\((0x[0-9a-f]+|\d+)\)/i);
+  if (indexMatch) {
+    return decodeHansPublisherChallengeStringAt(html, Number.parseInt(indexMatch[1], 0));
+  }
+  return cleanText(String(html || "").match(/\bp\s*=\s*['"]([0-9a-f]{40})['"]/i)?.[1]);
+}
+
+function decodeHansPublisherChallengeStringAt(html, encodedIndex) {
+  const values = extractHansPublisherChallengeStringValues(html);
+  const target = extractHansPublisherChallengeTarget(html);
+  if (!values.length || !Number.isFinite(target)) {
+    return "";
+  }
+  const cache = {};
+  const decodeAt = (index) => {
+    const offset = index - 0xfb;
+    if (offset < 0 || offset >= values.length) {
+      return "";
+    }
+    const cacheKey = `${offset}:${values[0]}`;
+    if (!cache[cacheKey]) {
+      cache[cacheKey] = decodeHansPublisherChallengeString(values[offset]);
+    }
+    return cache[cacheKey];
+  };
+  for (let guard = 0; guard < 10000; guard += 1) {
+    try {
+      const result =
+        -Number.parseInt(decodeAt(0x117), 10) / 0x1 * (Number.parseInt(decodeAt(0x111), 10) / 0x2) +
+        -Number.parseInt(decodeAt(0xfb), 10) / 0x3 * (Number.parseInt(decodeAt(0x10e), 10) / 0x4) +
+        -Number.parseInt(decodeAt(0x101), 10) / 0x5 * (-Number.parseInt(decodeAt(0xfd), 10) / 0x6) +
+        -Number.parseInt(decodeAt(0x102), 10) / 0x7 * (Number.parseInt(decodeAt(0x122), 10) / 0x8) +
+        Number.parseInt(decodeAt(0x112), 10) / 0x9 +
+        Number.parseInt(decodeAt(0x11d), 10) / 0xa * (Number.parseInt(decodeAt(0x11c), 10) / 0xb) +
+        Number.parseInt(decodeAt(0x114), 10) / 0xc;
+      if (result === target) {
+        break;
+      }
+      values.push(values.shift());
+    } catch (_error) {
+      values.push(values.shift());
+    }
+  }
+  return cleanText(decodeAt(encodedIndex));
+}
+
+function extractHansPublisherChallengeStringValues(html) {
+  const body = String(html || "").match(/function\s+a0i\s*\(\)\s*\{\s*var\s+\w+\s*=\s*\[([\s\S]*?)\];\s*a0i\s*=\s*function/i)?.[1] || "";
+  return Array.from(body.matchAll(/'([^']*)'/g)).map((match) => match[1]);
+}
+
+function extractHansPublisherChallengeTarget(html) {
+  const value = String(html || "").match(/\}\(a0i,\s*(0x[0-9a-f]+|\d+)\s*\)/i)?.[1];
+  return value ? Number.parseInt(value, 0) : NaN;
+}
+
+function decodeHansPublisherChallengeString(value) {
+  const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/=";
+  let bufferText = "";
+  let escaped = "";
+  const functionText = "function g(l){}";
+  for (let q = 0, r = 0, s = 0, t = 0; (s = cleanText(value).charAt(t++));) {
+    s = alphabet.indexOf(s);
+    if (!(~s)) {
+      continue;
+    }
+    r = q % 4 ? r * 64 + s : s;
+    if (q++ % 4) {
+      bufferText += functionText.charCodeAt(t + 0xa) - 0xa !== 0
+        ? String.fromCharCode(0xff & (r >> ((-0x2 * q) & 0x6)))
+        : q;
+    }
+  }
+  for (let index = 0; index < bufferText.length; index += 1) {
+    escaped += `%${(`00${bufferText.charCodeAt(index).toString(16)}`).slice(-2)}`;
+  }
+  try {
+    return decodeURIComponent(escaped);
+  } catch (_error) {
+    return "";
+  }
+}
+
+function scorePublisherFileCandidate(tag, url) {
+  const text = `${tag || ""} ${url || ""}`.toLowerCase();
+  let score = 1;
+  if (text.includes("chinese") || text.includes("中文")) {
+    score += 10;
+  }
+  if (text.includes("english")) {
+    score += 5;
+  }
+  if (text.includes("russian")) {
+    score += 1;
+  }
+  return score;
+}
+
+function isLikelyPdfDownloadUrl(value) {
+  const text = cleanText(value);
+  if (!text) {
+    return false;
+  }
+  if (/downloadSuppFile/i.test(text)) {
+    return false;
+  }
+  return /\.pdf(?:[?#]|$)/i.test(text) || /\/article\/download\/\d+\/\d+(?:[/?#]|$)/i.test(text);
+}
+
+function resolveUrl(value, baseUrl) {
+  try {
+    return new URL(value, baseUrl).href;
+  } catch (_error) {
+    return "";
+  }
+}
+
+function decodeHtmlAttribute(value) {
+  return cleanText(value)
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
 }
 
 function extractCrossrefAttachments(item, requestUrl) {
@@ -725,6 +1232,7 @@ const WorkbenchLiteratureSourceAdapters = {
   createCrossrefAdapter,
   createHttpConnectorAdapter,
   createOpenAlexAdapter,
+  createPublisherPdfAdapter,
   createSciHubResolverAdapter,
   createSciPdfEmbeddedAdapter,
   createSourceAdapterFailure,

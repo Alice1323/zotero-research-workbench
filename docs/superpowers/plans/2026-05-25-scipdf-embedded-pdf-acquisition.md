@@ -12,7 +12,7 @@
 
 ## Execution Notes
 
-- Work from `C:\Users\44199\水银灯的书库\水银灯的代码库\归档项目\zotero-research-workbench`.
+- Work from `C:\Users\44199\水银灯的书库\水银灯的代码库\归档项目\Zotero项目\zotero-research-workbench`.
 - Use native PowerShell commands. Do not rely on WSL or bare `bash`.
 - The repository currently contains uncommitted PDF acquisition work. Do not revert it. Stage only files touched by the current task before each commit.
 - Keep automated tests below the Zotero write boundary. Do not run real Zotero attachment writes during automated verification.

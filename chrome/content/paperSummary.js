@@ -235,6 +235,16 @@
   };
   const HTML_NS = "http://www.w3.org/1999/xhtml";
   const WorkbenchLlmRuntimeGuard = createLlmRuntimeGuard();
+  const PDF_SOURCE_QUERY_TIMEOUT_MS = 8000;
+  const PDF_SOURCE_QUERY_TIMEOUTS_MS = {
+    "sci-pdf": 60000,
+    "publisher-pdf": 20000
+  };
+  const PDF_ACQUISITION_DOI_BATCH_LIMIT = 20;
+  const PDF_ACQUISITION_SCOPES = {
+    selected: "selected",
+    batch: "batch"
+  };
 
   function getField(id) {
     return document.getElementById(id);
@@ -1223,10 +1233,15 @@
   }
 
   function readPdfAcquisitionSettings() {
+    const rawSciPdfBaseUrls = readMultilineValues("pdf-source-scipdf-base-urls");
+    const resolver = window.WorkbenchSciPdfEmbeddedResolver;
+    const normalizedSciPdfBaseUrls = resolver ? resolver.normalizeSciPdfBaseUrls(rawSciPdfBaseUrls) : [];
     return {
       sciPdfEnabled: getField("pdf-source-scipdf-enabled")?.checked !== false,
       openAccessEnabled: getField("pdf-source-open-access-enabled")?.checked !== false,
-      sciPdfBaseUrls: readMultilineValues("pdf-source-scipdf-base-urls"),
+      sciPdfBaseUrls: normalizedSciPdfBaseUrls,
+      rawSciPdfBaseUrls,
+      invalidSciPdfBaseUrls: rawSciPdfBaseUrls.filter((url) => !normalizedSciPdfBaseUrls.includes(url)),
       syncToZoteroFindFullText: getField("pdf-source-scipdf-sync-enabled")?.checked === true
     };
   }
@@ -1238,14 +1253,16 @@
       .filter(Boolean);
   }
 
-  function collectPdfAcquisitionDois(snapshot) {
+  function collectPdfAcquisitionDois(snapshot, scope = PDF_ACQUISITION_SCOPES.selected) {
     const resolver = window.WorkbenchSciPdfEmbeddedResolver;
     if (!resolver) {
       return [];
     }
+    if (scope === PDF_ACQUISITION_SCOPES.batch) {
+      return resolver.extractSciPdfDoiValues(snapshot?.documentCandidates || []);
+    }
     return resolver.extractSciPdfDoiValues(
-      window.WorkbenchSelectedPaper,
-      snapshot?.documentCandidates || []
+      window.WorkbenchSelectedPaper
     );
   }
 
@@ -1290,39 +1307,603 @@
         baseUrls: settings.sciPdfBaseUrls
       }));
     }
+    if (settings.openAccessEnabled && WorkbenchLiteratureSourceAdapters.createPublisherPdfAdapter) {
+      adapters.push(WorkbenchLiteratureSourceAdapters.createPublisherPdfAdapter({
+        fetchImpl: workbenchFetch
+      }));
+    }
     return adapters;
   }
 
-  async function findPdfAcquisitionCandidates() {
-    const snapshot = loadWorkbenchSnapshot();
-    const settings = readPdfAcquisitionSettings();
-    const dois = collectPdfAcquisitionDois(snapshot);
-    setText("pdf-acquisition-selected-status", window.WorkbenchSelectedPaper?.title || "未选择文献");
-    setText("pdf-acquisition-doi-status", String(dois.length));
-    if (!dois.length) {
-      setText("pdf-acquisition-status", "未找到 DOI");
+  async function findPdfAcquisitionCandidates(scope = PDF_ACQUISITION_SCOPES.selected) {
+    const queryScope = normalizePdfAcquisitionScope(scope);
+    window.WorkbenchPdfAcquisitionScope = queryScope;
+    window.WorkbenchActivePdfAcquisitionWriteQueue = null;
+    window.WorkbenchActivePdfAcquisitionWriteQueueId = "";
+    setText("pdf-acquisition-status", formatPdfAcquisitionProgressMessage(queryScope));
+    setText("pdf-acquisition-inline-write-queue", "加入 PDF 后可直接运行写入队列。");
+    setText("pdf-acquisition-diagnostics", "PDF 获取诊断：正在收集输入...");
+    setPdfAcquisitionQueryButtonsDisabled(true);
+    try {
+      if (queryScope === PDF_ACQUISITION_SCOPES.selected) {
+        await refreshSelectedPaper();
+      }
+      const snapshot = loadWorkbenchSnapshot();
+      const settings = readPdfAcquisitionSettings();
+      const dois = collectPdfAcquisitionDois(snapshot, queryScope);
+      const doiBatch = createPdfAcquisitionDoiBatch(
+        dois,
+        queryScope === PDF_ACQUISITION_SCOPES.selected ? window.WorkbenchSelectedPaper : null
+      );
+      const adapters = createPdfAcquisitionSourceAdapters(settings);
+      const diagnostics = createPdfAcquisitionDiagnostics({
+        settings,
+        dois,
+        doiBatch,
+        adapters,
+        snapshot,
+        scope: queryScope
+      });
+      renderPdfAcquisitionDiagnostics(diagnostics);
+      setText("pdf-acquisition-selected-status", window.WorkbenchSelectedPaper?.title || "未选择文献");
+      setText("pdf-acquisition-doi-status", String(dois.length));
+      if (!dois.length) {
+        setText("pdf-acquisition-status", "未找到 DOI");
+        renderPdfAcquisitionCandidates([]);
+        return;
+      }
+
+      const candidates = [];
+      const failures = [];
+      for (const adapter of adapters) {
+        const sourceStartedAt = Date.now();
+        try {
+          const result = await withTimeout(
+            adapter.query({
+              dois: doiBatch.dois,
+              selectedItems: queryScope === PDF_ACQUISITION_SCOPES.selected
+                ? [window.WorkbenchSelectedPaper].filter(Boolean)
+                : [],
+              documentCandidates: [],
+              observedAt: new Date().toISOString(),
+              topicId: snapshot.researchTopics?.[0]?.id || ""
+            }),
+            getPdfSourceQueryTimeoutMs(adapter.sourceAdapterId),
+            `PDF 来源查询超时：${adapter.sourceAdapterId || "unknown"}`
+          );
+          candidates.push(...(result.candidates || []));
+          failures.push(...(result.failures || []));
+          diagnostics.sourceRuns.push(createPdfSourceRunDiagnostic({
+            adapter,
+            startedAt: sourceStartedAt,
+            result
+          }));
+        } catch (error) {
+          const failure = createLayeredErrorNotice(error, "PDF 来源查询失败");
+          failures.push(failure);
+          diagnostics.sourceRuns.push(createPdfSourceRunDiagnostic({
+            adapter,
+            startedAt: sourceStartedAt,
+            error: failure
+          }));
+        }
+        window.WorkbenchPdfAcquisitionCandidates = candidates;
+        renderPdfAcquisitionCandidates(candidates);
+        renderPdfAcquisitionDiagnostics(diagnostics);
+        setText("pdf-acquisition-status", `${formatPdfAcquisitionProgressMessage(queryScope)} 已找到 ${candidates.length}｜来源失败 ${failures.length}`);
+      }
+
+      window.WorkbenchPdfAcquisitionCandidates = candidates;
+      renderPdfAcquisitionCandidates(candidates);
+      renderPdfAcquisitionDiagnostics(diagnostics);
+      setText("pdf-acquisition-status", formatPdfAcquisitionFinalStatus(candidates, failures, diagnostics));
+    } catch (error) {
+      const notice = createLayeredErrorNotice(error, "PDF 候选查找失败");
       renderPdfAcquisitionCandidates([]);
+      setText("pdf-acquisition-status", notice.userMessage);
+      setText("pdf-acquisition-diagnostics", `PDF 获取诊断：${notice.userMessage}\n${notice.technicalDetail || ""}`.trim());
+    } finally {
+      setPdfAcquisitionQueryButtonsDisabled(false);
+    }
+  }
+
+  function normalizePdfAcquisitionScope(scope) {
+    return scope === PDF_ACQUISITION_SCOPES.batch ? PDF_ACQUISITION_SCOPES.batch : PDF_ACQUISITION_SCOPES.selected;
+  }
+
+  function formatPdfAcquisitionScopeLabel(scope) {
+    return normalizePdfAcquisitionScope(scope) === PDF_ACQUISITION_SCOPES.batch
+      ? "发现候选 DOI 批量"
+      : "当前选中文献";
+  }
+
+  function formatPdfAcquisitionProgressMessage(scope) {
+    return normalizePdfAcquisitionScope(scope) === PDF_ACQUISITION_SCOPES.batch
+      ? "正在批量查找 PDF 候选..."
+      : "正在查找当前选中文献 PDF...";
+  }
+
+  function formatPdfAcquisitionFinalStatus(candidates, failures, diagnostics) {
+    const candidateCount = Array.isArray(candidates) ? candidates.length : 0;
+    const sourceFailures = Array.isArray(failures) ? failures : [];
+    const failureCount = sourceFailures.length;
+    const sourceRunCount = Array.isArray(diagnostics?.sourceRuns) ? diagnostics.sourceRuns.length : 0;
+    if (!candidateCount && failureCount && sourceRunCount > 1) {
+      return `未找到 PDF 候选｜来源失败 ${failureCount}｜详情见 PDF 获取诊断`;
+    }
+    if (!candidateCount && failureCount && sourceFailures[0]?.userMessage) {
+      return sourceFailures[0].userMessage;
+    }
+    return `PDF 候选 ${candidateCount}｜来源失败 ${failureCount}`;
+  }
+
+  function setPdfAcquisitionQueryButtonsDisabled(disabled) {
+    setButtonDisabled("pdf-acquisition-find-candidates", disabled);
+    setButtonDisabled("pdf-acquisition-find-batch-candidates", disabled);
+  }
+
+  function createPdfAcquisitionDoiBatch(dois, selectedPaper) {
+    const allDois = uniqueText(Array.isArray(dois) ? dois : []);
+    const selectedDois = collectPdfAcquisitionDoisFromValue(selectedPaper);
+    const ranked = allDois
+      .map((doi, index) => ({
+        doi,
+        index,
+        score: scorePdfAcquisitionDoi(doi, selectedDois)
+      }))
+      .sort((left, right) => right.score - left.score || left.index - right.index)
+      .map((entry) => entry.doi);
+    const batch = ranked.slice(0, PDF_ACQUISITION_DOI_BATCH_LIMIT);
+    return {
+      dois: batch,
+      totalCount: allDois.length,
+      processedCount: batch.length,
+      skippedCount: Math.max(0, allDois.length - batch.length)
+    };
+  }
+
+  function collectPdfAcquisitionDoisFromValue(value) {
+    const resolver = window.WorkbenchSciPdfEmbeddedResolver;
+    return resolver ? resolver.extractSciPdfDoiValues(value) : [];
+  }
+
+  function scorePdfAcquisitionDoi(doi, selectedDois) {
+    const text = cleanDisplayText(doi).toLowerCase();
+    let score = selectedDois.includes(text) ? 1000 : 0;
+    if (isLikelySciPdfHighYieldDoi(text)) {
+      score += 100;
+    }
+    if (isLikelySciPdfLowYieldDoi(text)) {
+      score -= 100;
+    }
+    return score;
+  }
+
+  function isLikelySciPdfHighYieldDoi(doi) {
+    return /^10\.(1016|1038|1002|1007|1103|1109|1073|1093|1111|1136|1186|1145|1126)\//.test(doi);
+  }
+
+  function isLikelySciPdfLowYieldDoi(doi) {
+    return /^10\.(12677|18356|37155|3760|3969|54254|62662|61654|26549|5790|69979|2991|34157)\//.test(doi);
+  }
+
+  function createPdfAcquisitionDiagnostics({ settings, dois, doiBatch, adapters, snapshot, scope } = {}) {
+    return {
+      scope: normalizePdfAcquisitionScope(scope),
+      dois: Array.isArray(dois) ? dois : [],
+      doiBatch: doiBatch || {
+        dois: Array.isArray(dois) ? dois : [],
+        totalCount: Array.isArray(dois) ? dois.length : 0,
+        processedCount: Array.isArray(dois) ? dois.length : 0,
+        skippedCount: 0
+      },
+      adapterOrder: (Array.isArray(adapters) ? adapters : [])
+        .map((adapter) => cleanDisplayText(adapter?.sourceAdapterId))
+        .filter(Boolean),
+      sciPdfBaseUrls: Array.isArray(settings?.sciPdfBaseUrls) ? settings.sciPdfBaseUrls : [],
+      invalidSciPdfBaseUrls: Array.isArray(settings?.invalidSciPdfBaseUrls) ? settings.invalidSciPdfBaseUrls : [],
+      selectedTitle: cleanDisplayText(window.WorkbenchSelectedPaper?.title) || "未选择文献",
+      selectedKey: cleanDisplayText(window.WorkbenchSelectedPaper?.key),
+      documentCandidateCount: Array.isArray(snapshot?.documentCandidates) ? snapshot.documentCandidates.length : 0,
+      sourceRuns: []
+    };
+  }
+
+  function createPdfSourceRunDiagnostic({ adapter, startedAt, result, error } = {}) {
+    const failures = Array.isArray(result?.failures)
+      ? result.failures
+      : error
+        ? [error]
+        : [];
+    return {
+      sourceAdapterId: cleanDisplayText(adapter?.sourceAdapterId) || "unknown",
+      elapsedMs: Math.max(0, Date.now() - Number(startedAt || Date.now())),
+      candidateCount: Array.isArray(result?.candidates) ? result.candidates.length : 0,
+      failureCount: failures.length,
+      failures
+    };
+  }
+
+  function renderPdfAcquisitionDiagnostics(diagnostics) {
+    const field = getField("pdf-acquisition-diagnostics");
+    if (!field) {
       return;
     }
+    const lines = [
+      "PDF 获取诊断",
+      `查询范围：${formatPdfAcquisitionScopeLabel(diagnostics?.scope)}`,
+      `DOI：${formatPdfAcquisitionDoiDiagnostic(diagnostics)}`,
+      `来源顺序：${diagnostics?.adapterOrder?.length ? diagnostics.adapterOrder.join(" -> ") : "未启用来源"}`,
+      `Sci-PDF 站点：${diagnostics?.sciPdfBaseUrls?.length || 0} 个`
+    ];
+    for (const baseUrl of diagnostics?.sciPdfBaseUrls || []) {
+      lines.push(`- ${baseUrl}`);
+    }
+    if (diagnostics?.invalidSciPdfBaseUrls?.length) {
+      lines.push(`已忽略无效站点：${diagnostics.invalidSciPdfBaseUrls.join("；")}`);
+    }
+    lines.push(`选中文献：${diagnostics?.selectedTitle || "未选择文献"}`);
+    if (diagnostics?.selectedKey) {
+      lines.push(`Zotero Key：${diagnostics.selectedKey}`);
+    }
+    lines.push(`发现候选上下文：${diagnostics?.documentCandidateCount || 0}`);
+    const sourceRuns = Array.isArray(diagnostics?.sourceRuns) ? diagnostics.sourceRuns : [];
+    if (!sourceRuns.length) {
+      lines.push("来源结果：尚未查询来源");
+    } else {
+      lines.push("来源结果：");
+      for (const run of sourceRuns) {
+        lines.push(formatPdfSourceRunDiagnosticLine(run, diagnostics?.doiBatch));
+        for (const failure of run.failures.slice(0, 5)) {
+          const summary = formatPdfSourceFailureDiagnostic(failure);
+          if (summary) {
+            lines.push(`- ${summary}`);
+          }
+        }
+        if (run.failures.length > 5) {
+          lines.push(`- 其余失败 ${run.failures.length - 5} 个已省略`);
+        }
+      }
+    }
+    field.textContent = sanitizeSecretText(lines.join("\n"));
+  }
 
-    const adapters = createPdfAcquisitionSourceAdapters(settings);
-    const candidates = [];
-    const failures = [];
-    for (const adapter of adapters) {
-      const result = await adapter.query({
-        dois,
-        selectedItems: [window.WorkbenchSelectedPaper].filter(Boolean),
-        documentCandidates: snapshot.documentCandidates || [],
-        observedAt: new Date().toISOString(),
-        topicId: snapshot.researchTopics?.[0]?.id || ""
-      });
-      candidates.push(...(result.candidates || []));
-      failures.push(...(result.failures || []));
+  function formatPdfAcquisitionDoiDiagnostic(diagnostics) {
+    const dois = Array.isArray(diagnostics?.dois) ? diagnostics.dois : [];
+    if (!dois.length) {
+      return "未收集到 DOI";
+    }
+    const batch = diagnostics?.doiBatch || {};
+    if (dois.length <= PDF_ACQUISITION_DOI_BATCH_LIMIT) {
+      return dois.join("；");
+    }
+    const examples = (Array.isArray(batch.dois) ? batch.dois : dois)
+      .slice(0, 3)
+      .join("；");
+    return `${dois.length} 个｜本次处理 ${batch.processedCount || 0}｜跳过 ${batch.skippedCount || 0}｜DOI 示例：${examples}`;
+  }
+
+  function formatPdfSourceRunDiagnosticLine(run, doiBatch) {
+    const processed = Number(doiBatch?.processedCount) || 0;
+    const total = Number(doiBatch?.totalCount) || processed;
+    const skipped = Number(doiBatch?.skippedCount) || 0;
+    const batchSuffix = total > processed
+      ? `｜DOI ${processed}/${total}｜跳过 ${skipped}`
+      : "";
+    return `${run.sourceAdapterId}：候选 ${run.candidateCount}｜失败 ${run.failureCount}｜耗时 ${run.elapsedMs}ms${batchSuffix}`;
+  }
+
+  function formatPdfSourceFailureDiagnostic(failure) {
+    const parts = [
+      cleanDisplayText(failure?.sourceAdapterId),
+      cleanDisplayText(failure?.userMessage || failure?.message)
+    ].filter(Boolean);
+    const details = parsePdfSourceFailureDetails(failure);
+    const doi = cleanDisplayText(details?.doi);
+    const status = cleanDisplayText(failure?.status || details?.status);
+    const requestUrl = cleanDisplayText(details?.requestUrl);
+    const landingUrl = cleanDisplayText(details?.landingUrl);
+    const reason = cleanDisplayText(details?.reason);
+    if (doi) {
+      parts.push(`doi ${doi}`);
+    }
+    if (reason) {
+      parts.push(reason);
+    }
+    if (landingUrl) {
+      parts.push(`landing ${landingUrl}`);
+    }
+    if (status) {
+      parts.push(`status ${status}`);
+    }
+    if (requestUrl) {
+      parts.push(`request ${requestUrl}`);
+    }
+    const hansDetails = formatHansPublisherDiagnosticDetails(details);
+    if (hansDetails) {
+      parts.push(hansDetails);
+    }
+    for (const nested of Array.isArray(details?.failures) ? details.failures.slice(0, 3) : []) {
+      const nestedReason = cleanDisplayText(nested?.reason || nested?.message);
+      const nestedStatus = cleanDisplayText(nested?.status);
+      const nestedRequestUrl = cleanDisplayText(nested?.requestUrl);
+      const nestedParts = [
+        nestedReason,
+        nestedStatus ? `status ${nestedStatus}` : "",
+        nestedRequestUrl ? `request ${nestedRequestUrl}` : ""
+      ].filter(Boolean);
+      if (nestedParts.length) {
+        parts.push(nestedParts.join("｜"));
+      }
+    }
+    return parts.join("｜");
+  }
+
+  function formatHansPublisherDiagnosticDetails(details) {
+    if (!details || typeof details !== "object") {
+      return "";
+    }
+    const hasHansFields = [
+      "hansChallengeDetected",
+      "hansChallengeCookieCreated",
+      "hansChallengeRetried",
+      "hansRetryStillChallenge"
+    ].some((key) => Object.prototype.hasOwnProperty.call(details, key));
+    if (!hasHansFields) {
+      return "";
+    }
+    const parts = [
+      details.hansChallengeDetected ? "Hans challenge detected" : "",
+      details.hansChallengeCookieCreated ? "cookie created" : "cookie missing",
+      details.hansChallengeRetried ? "retried" : "",
+      details.hansRetryStillChallenge ? "retry still challenge" : "",
+      cleanDisplayText(details.hansRetryStatus) ? `retry status ${cleanDisplayText(details.hansRetryStatus)}` : ""
+    ].filter(Boolean);
+    return parts.join(" / ");
+  }
+
+  function parsePdfSourceFailureDetails(failure) {
+    if (!failure || typeof failure !== "object") {
+      return {};
+    }
+    if (failure.error && typeof failure.error === "object") {
+      return failure.error;
+    }
+    const detail = cleanDisplayText(failure.technicalDetail);
+    if (!detail) {
+      return {};
+    }
+    try {
+      const parsed = JSON.parse(detail);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  function withTimeout(promise, timeoutMs, message) {
+    const numericTimeoutMs = Number(timeoutMs);
+    if (!Number.isFinite(numericTimeoutMs) || numericTimeoutMs <= 0 || typeof setTimeout !== "function") {
+      return promise;
+    }
+    let timer = null;
+    const timeoutPromise = new Promise((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error(message || `操作超时：${numericTimeoutMs}ms`)), numericTimeoutMs);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+      if (timer && typeof clearTimeout === "function") {
+        clearTimeout(timer);
+      }
+    });
+  }
+
+  function getPdfSourceQueryTimeoutMs(sourceAdapterId) {
+    return PDF_SOURCE_QUERY_TIMEOUTS_MS[sourceAdapterId] || PDF_SOURCE_QUERY_TIMEOUT_MS;
+  }
+
+  async function testSciPdfAcquisitionSites() {
+    const settings = readPdfAcquisitionSettings();
+    const resolver = window.WorkbenchSciPdfEmbeddedResolver;
+    const validUrls = resolver ? resolver.normalizeSciPdfBaseUrls(settings.sciPdfBaseUrls) : [];
+    if (!resolver) {
+      setPdfAcquisitionSiteTestStatus("Sci-PDF resolver runtime 不可用");
+      return null;
+    }
+    if (!validUrls.length) {
+      setPdfAcquisitionSiteTestStatus("没有可测试的 Sci-PDF 站点");
+      return { okCount: 0, failureCount: 0, results: [] };
     }
 
-    window.WorkbenchPdfAcquisitionCandidates = candidates;
-    renderPdfAcquisitionCandidates(candidates);
-    setText("pdf-acquisition-status", `PDF 候选 ${candidates.length}｜来源失败 ${failures.length}`);
+    const dois = collectPdfAcquisitionDois(loadWorkbenchSnapshot());
+    if (!dois.length) {
+      setPdfAcquisitionSiteTestStatus(`Sci-PDF 站点 ${validUrls.length} 个可用配置；未找到 DOI，无法联网测试`);
+      return { okCount: 0, failureCount: validUrls.length, results: [] };
+    }
+
+    const doi = dois[0];
+    setPdfAcquisitionSiteTestStatus(`正在测试 ${validUrls.length} 个 Sci-PDF 站点...`);
+    const results = [];
+    for (const baseUrl of validUrls) {
+      try {
+        const resolved = await resolver.resolveSciPdfDoi({
+          doi,
+          baseUrls: [baseUrl],
+          fetchImpl: workbenchFetch
+        });
+        results.push({
+          baseUrl,
+          ok: Boolean(resolved?.pdfUrl),
+          pdfUrl: cleanText(resolved?.pdfUrl),
+          failureCount: Array.isArray(resolved?.failures) ? resolved.failures.length : 0,
+          reason: formatSciPdfSiteTestReason(resolved)
+        });
+      } catch (error) {
+        results.push({
+          baseUrl,
+          ok: false,
+          failureCount: 1,
+          message: cleanText(error?.message),
+          reason: cleanText(error?.message) || "fetch-error"
+        });
+      }
+    }
+    const okCount = results.filter((result) => result.ok).length;
+    const failureCount = results.length - okCount;
+    const message = [
+      `Sci-PDF 站点测试：可用 ${okCount}｜失败 ${failureCount}`,
+      `DOI ${doi}`,
+      ...results.map(formatSciPdfSiteTestResult)
+    ].join("｜");
+    setPdfAcquisitionSiteTestStatus(message);
+    return { okCount, failureCount, results };
+  }
+
+  function setPdfAcquisitionSiteTestStatus(message) {
+    setText("pdf-source-scipdf-test-status", message);
+    setText("pdf-acquisition-status", message);
+  }
+
+  function formatSciPdfSiteTestResult(result) {
+    const baseUrl = cleanText(result?.baseUrl) || "unknown-site";
+    if (result?.ok) {
+      return `${baseUrl} 可用`;
+    }
+    return `${baseUrl} 失败 ${cleanText(result?.reason) || "unknown"}`;
+  }
+
+  function formatSciPdfSiteTestReason(resolved) {
+    const failures = Array.isArray(resolved?.failures) ? resolved.failures : [];
+    const lastFailure = failures[failures.length - 1];
+    if (!lastFailure) {
+      return resolved?.pdfUrl ? "" : "pdf-url-missing";
+    }
+    const reason = cleanText(lastFailure.reason) || "failed";
+    const status = cleanText(lastFailure.status);
+    return status ? `${reason}-${status}` : reason;
+  }
+
+  function addPdfAcquisitionCandidatesToWritePlan(options = {}) {
+    const candidates = Array.isArray(window.WorkbenchPdfAcquisitionCandidates)
+      ? window.WorkbenchPdfAcquisitionCandidates
+      : [];
+    const requestedCandidateIds = uniqueText(options?.candidateIds);
+    const attachmentByCandidateId = options?.attachmentByCandidateId || {};
+    const importableCandidates = candidates.filter((candidate) =>
+      (!requestedCandidateIds.length || requestedCandidateIds.includes(cleanText(candidate?.id))) &&
+      (Array.isArray(candidate?.attachments) ? candidate.attachments : []).some((attachment) => attachment?.importable)
+    );
+    if (!importableCandidates.length) {
+      setText("pdf-acquisition-status", "暂无可加入写入计划的 PDF 候选");
+      return null;
+    }
+
+    try {
+      const createdAt = new Date().toISOString();
+      const snapshot = loadWorkbenchSnapshot();
+      const topicContext = ensurePdfAcquisitionTopic(snapshot, importableCandidates, createdAt);
+      const topicId = topicContext.topicId;
+      const selectedPdfTarget = resolveSelectedPdfAcquisitionTarget();
+      const importMode = selectedPdfTarget ? "attachment-only" : "zotero-item-plus-attachment";
+      const recorded = recordLiteratureDiscoveryCandidatesTransaction({
+        snapshot: topicContext.snapshot,
+        jobId: "pdf-acquisition",
+        topicId,
+        candidates: importableCandidates,
+        recordedAt: createdAt
+      });
+      const selections = importableCandidates.map((candidate) => ({
+        candidateId: cleanText(candidate.id),
+        importMode,
+        attachmentId: findImportableAttachmentId(candidate, attachmentByCandidateId[cleanText(candidate.id)]),
+        ...(selectedPdfTarget || {})
+      })).filter((selection) => selection.candidateId);
+      const importResult = ResearchPanelOrchestrator.createZoteroImportPlanWorkflow({
+        snapshot: recorded.snapshot,
+        topicId,
+        selections,
+        createdAt
+      });
+      const queue = markPdfAcquisitionWriteQueue(createZoteroWriteQueue({ importPlan: importResult.importPlan, createdAt }));
+      const queueResult = createZoteroWriteQueueTransaction({
+        snapshot: importResult.snapshot,
+        queue,
+        createdAt
+      });
+      saveWorkbenchSnapshot(queueResult.snapshot);
+      const records = ResearchPanelOrchestrator.createPanelRecords(queueResult.snapshot, { topicId });
+      renderDocumentCandidateReview(records.candidateReview);
+      renderZoteroWriteQueue(createZoteroWriteQueueReadModel(queueResult.snapshot, { topicId }));
+      window.WorkbenchActivePdfAcquisitionWriteQueue = queue;
+      window.WorkbenchActivePdfAcquisitionWriteQueueId = queue.id;
+      setButtonDisabled("pdf-acquisition-run-write-queue", false);
+      setText(
+        "pdf-acquisition-inline-write-queue",
+        `写入计划已创建，可运行写入队列：${queue.id}｜entries ${queue.entries.length}`
+      );
+      setText(
+        "pdf-acquisition-status",
+        `写入计划已创建：条目 ${importResult.importPlan.expectedWrites.items}｜附件 ${importResult.importPlan.expectedWrites.attachments}`
+      );
+      return { ...importResult, queue, snapshot: queueResult.snapshot };
+    } catch (error) {
+      const notice = createLayeredErrorNotice(error, "创建 PDF 写入计划失败");
+      setText("pdf-acquisition-status", notice.userMessage);
+      return null;
+    }
+  }
+
+  function resolveSelectedPdfAcquisitionTarget() {
+    if (cleanText(window.WorkbenchPdfAcquisitionScope) !== PDF_ACQUISITION_SCOPES.selected) {
+      return null;
+    }
+    const target = resolveSelectedZoteroItemTarget();
+    return target.targetZoteroItemKey || target.targetZoteroItemId ? target : null;
+  }
+
+  function inferPdfAcquisitionTopicId(snapshot, candidates) {
+    const candidateTopicId = (Array.isArray(candidates) ? candidates : [])
+      .map((candidate) => cleanText(candidate?.topicId))
+      .find(Boolean);
+    return candidateTopicId || cleanText(snapshot?.researchTopics?.[0]?.id);
+  }
+
+  function ensurePdfAcquisitionTopic(snapshot, candidates, createdAt) {
+    const topicId = inferPdfAcquisitionTopicId(snapshot, candidates);
+    if (topicId) {
+      return { snapshot, topicId };
+    }
+    const topic = createResearchTopicInput({
+      title: "PDF 获取",
+      description: "PDF 获取候选写入计划",
+      sourceScopes: [{ kind: "pdf-acquisition" }],
+      createdAt,
+      existingTopicIds: (snapshot?.researchTopics || []).map((entry) => entry.id)
+    });
+    return {
+      snapshot: {
+        ...snapshot,
+        researchTopics: [...(Array.isArray(snapshot?.researchTopics) ? snapshot.researchTopics : []), topic]
+      },
+      topicId: topic.id
+    };
+  }
+
+  function findFirstImportableAttachmentId(candidate) {
+    return findImportableAttachmentId(candidate);
+  }
+
+  function findImportableAttachmentId(candidate, preferredAttachmentId) {
+    const preferred = cleanText(preferredAttachmentId);
+    if (preferred) {
+      const attachment = (Array.isArray(candidate?.attachments) ? candidate.attachments : [])
+        .find((entry) => entry?.importable && cleanText(entry?.id || entry?.referenceId) === preferred);
+      if (attachment) {
+        return cleanText(attachment.id || attachment.referenceId);
+      }
+    }
+    const attachment = (Array.isArray(candidate?.attachments) ? candidate.attachments : [])
+      .find((entry) => entry?.importable);
+    return cleanText(attachment?.id || attachment?.referenceId);
   }
 
   function syncSciPdfResolversToZoteroFindFullText() {
@@ -1539,8 +2120,25 @@
   function createPdfCandidateRow(candidate, attachment) {
     const row = createHtmlElement("div");
     row.className = "pdf-candidate-row";
+    const titleRow = createHtmlElement("div");
+    titleRow.className = "pdf-candidate-title-row";
     const title = createHtmlElement("strong");
     title.textContent = candidate.title || "未命名候选文献";
+    titleRow.appendChild(title);
+    const action = createReviewButton("加入此 PDF", () => {
+      const candidateId = cleanText(candidate?.id);
+      const attachmentId = cleanText(attachment?.id || attachment?.referenceId);
+      return addPdfAcquisitionCandidatesToWritePlan({
+        candidateIds: [candidateId],
+        attachmentByCandidateId: { [candidateId]: attachmentId }
+      });
+    });
+    action.dataset.candidateId = cleanText(candidate?.id);
+    action.dataset.attachmentId = cleanText(attachment?.id || attachment?.referenceId);
+    if (!attachment.importable) {
+      action.setAttribute("disabled", "disabled");
+    }
+    titleRow.appendChild(action);
     const meta = createHtmlElement("span");
     meta.className = "record-meta";
     meta.textContent = [
@@ -1556,7 +2154,7 @@
       attachment.provenance?.requestUrl ? `request ${attachment.provenance.requestUrl}` : "",
       attachment.provenance?.selector ? `selector ${attachment.provenance.selector}` : ""
     ].filter(Boolean).join("｜");
-    row.appendChild(title);
+    row.appendChild(titleRow);
     row.appendChild(meta);
     row.appendChild(detail);
     return row;
@@ -1679,14 +2277,91 @@
     }
   }
 
+  function markPdfAcquisitionWriteQueue(queue) {
+    return {
+      ...queue,
+      provenance: {
+        ...(queue?.provenance || {}),
+        acquisitionSource: "pdf-acquisition"
+      }
+    };
+  }
+
+  function resolveRunnableZoteroWriteQueue(queue) {
+    if (queue && !isTerminalWriteQueueState(queue.state)) {
+      return queue;
+    }
+    const snapshot = loadWorkbenchSnapshot();
+    const queues = Array.isArray(snapshot?.zoteroWriteQueues) ? snapshot.zoteroWriteQueues : [];
+    const activeQueueId = cleanText(window.WorkbenchActivePdfAcquisitionWriteQueueId);
+    if (activeQueueId) {
+      const activeQueue = queues.find((candidate) =>
+        cleanText(candidate?.id) === activeQueueId && isRunnablePdfAcquisitionWriteQueue(candidate)
+      );
+      if (activeQueue) {
+        return activeQueue;
+      }
+    }
+    return selectLatestRunnablePdfAcquisitionWriteQueue(queues);
+  }
+
+  function selectLatestRunnablePdfAcquisitionWriteQueue(queues) {
+    return (Array.isArray(queues) ? queues : [])
+      .filter(isRunnablePdfAcquisitionWriteQueue)
+      .reduce((latest, queue, index) => {
+        if (!latest) {
+          return { queue, score: getZoteroWriteQueueActivityScore(queue), index };
+        }
+        const score = getZoteroWriteQueueActivityScore(queue);
+        if (score > latest.score || (score === latest.score && index > latest.index)) {
+          return { queue, score, index };
+        }
+        return latest;
+      }, null)?.queue || null;
+  }
+
+  function isRunnablePdfAcquisitionWriteQueue(queue) {
+    if (!queue || isTerminalWriteQueueState(queue.state)) {
+      return false;
+    }
+    const entries = Array.isArray(queue.entries) ? queue.entries : [];
+    const hasAttachmentEntry = entries.some((entry) => cleanText(entry?.kind) === "create-attachment");
+    if (!hasAttachmentEntry) {
+      return false;
+    }
+    if (cleanText(queue.provenance?.acquisitionSource) === "pdf-acquisition") {
+      return true;
+    }
+    return entries.every((entry) => cleanText(entry?.kind) === "create-attachment");
+  }
+
+  function getZoteroWriteQueueActivityScore(queue) {
+    return Math.max(
+      ...[queue?.completedAt, queue?.cancelledAt, queue?.pausedAt, queue?.startedAt, queue?.createdAt]
+        .map((value) => Date.parse(cleanText(value)))
+        .filter((value) => Number.isFinite(value)),
+      0
+    );
+  }
+
   async function runZoteroWriteQueue(queue) {
-    let current = queue || createZoteroWriteQueueReadModel(loadWorkbenchSnapshot()).activeQueue;
+    let current = resolveRunnableZoteroWriteQueue(queue);
     if (!current) {
       showDiscoveryError("Zotero 写入失败", new Error("暂无写入队列"));
+      setText("pdf-acquisition-status", "暂无写入队列：请先点击候选行的“加入此 PDF”");
+      setText("pdf-acquisition-inline-write-queue", "已点击运行写入队列，但暂无写入队列");
       return null;
     }
 
+    window.WorkbenchActivePdfAcquisitionWriteQueue = current;
+    window.WorkbenchActivePdfAcquisitionWriteQueueId = cleanText(current.id);
     setButtonDisabled("zotero-import-plan-create", true);
+    setButtonDisabled("pdf-acquisition-run-write-queue", true);
+    setText(
+      "pdf-acquisition-inline-write-queue",
+      `已点击运行写入队列，正在运行写入队列...｜${current.id}｜entries ${Array.isArray(current.entries) ? current.entries.length : 0}`
+    );
+    setText("pdf-acquisition-status", `正在运行 Zotero 写入队列：${current.id}`);
     try {
       while (true) {
         const next = runNextZoteroWriteQueueEntry({ queue: current, startedAt: new Date().toISOString() });
@@ -1735,14 +2410,61 @@
       }
       persistZoteroWriteQueueResult(current, null);
       renderZoteroWriteQueue(createZoteroWriteQueueReadModel({ zoteroWriteQueues: [current] }, { topicId: current.topicId }));
+      window.WorkbenchActivePdfAcquisitionWriteQueue = current;
+      window.WorkbenchActivePdfAcquisitionWriteQueueId = cleanText(current.id);
       setText("document-candidate-review-status", "Zotero 写入队列已执行");
+      const summary = summarizeWriteQueueForPdfStatus(current);
+      renderZoteroWriteQueueDiagnostics(current);
+      setText("pdf-acquisition-inline-write-queue", `写入队列已完成：${summary}`);
+      setText("pdf-acquisition-status", `Zotero 写入队列已执行：${summary}`);
       return current;
     } catch (error) {
       showDiscoveryError("Zotero 写入失败", error);
       return current;
     } finally {
       setButtonDisabled("zotero-import-plan-create", false);
+      setButtonDisabled("pdf-acquisition-run-write-queue", false);
     }
+  }
+
+  function summarizeWriteQueueForPdfStatus(queue) {
+    const entries = Array.isArray(queue?.entries) ? queue.entries : [];
+    const pdfEntries = entries.filter((entry) => cleanText(entry?.kind) === "create-attachment");
+    const statusEntries = pdfEntries.length ? pdfEntries : entries;
+    const succeeded = statusEntries.filter((entry) => cleanText(entry?.state) === "succeeded").length;
+    const failed = statusEntries.filter((entry) => cleanText(entry?.state) === "failed").length;
+    const skipped = statusEntries.filter((entry) => cleanText(entry?.state) === "skipped").length;
+    const running = statusEntries.filter((entry) => cleanText(entry?.state) === "running").length;
+    const queued = statusEntries.filter((entry) => cleanText(entry?.state) === "queued" || cleanText(entry?.state) === "blocked").length;
+    return `PDF 成功 ${succeeded}｜失败 ${failed}｜跳过 ${skipped}｜剩余 ${queued + running}`;
+  }
+
+  function renderZoteroWriteQueueDiagnostics(queue) {
+    const entries = Array.isArray(queue?.entries) ? queue.entries : [];
+    const failedEntries = entries.filter((entry) => ["failed", "skipped"].includes(cleanText(entry?.state)));
+    if (!failedEntries.length) {
+      return;
+    }
+    const lines = [
+      "Zotero 写入诊断",
+      `队列：${cleanText(queue?.id) || "未记录"}`,
+      `状态：${cleanText(queue?.state) || "未记录"}`,
+      `失败/跳过：${failedEntries.length}`
+    ];
+    for (const entry of failedEntries.slice(0, 10)) {
+      const result = entry?.result || {};
+      lines.push([
+        `- ${cleanText(entry?.kind) || "unknown"}`,
+        cleanText(entry?.candidateId) ? `candidate ${cleanText(entry.candidateId)}` : "",
+        `state ${cleanText(entry?.state) || "unknown"}`,
+        cleanText(entry?.errorReason || result.userMessage || result.errorReason),
+        cleanText(result.technicalDetail)
+      ].filter(Boolean).join("｜"));
+    }
+    if (failedEntries.length > 10) {
+      lines.push(`- 其余失败 ${failedEntries.length - 10} 个已省略`);
+    }
+    setText("pdf-acquisition-diagnostics", sanitizeSecretText(lines.join("\n")));
   }
 
   function persistZoteroWriteQueueResult(queue, entry) {
@@ -1784,6 +2506,10 @@
     if (cleanText(importMode) !== "attachment-only") {
       return {};
     }
+    return resolveSelectedZoteroItemTarget();
+  }
+
+  function resolveSelectedZoteroItemTarget() {
     const paper = window.WorkbenchSelectedPaper || readSelectedPaperContext();
     const normalized = paper ? normalizePaperContext(paper) : null;
     return {
@@ -3583,6 +4309,7 @@
     getField("prompt-template-selector").addEventListener("change", loadPromptTemplateEditor);
     getField("prompt-template-save").addEventListener("click", savePromptTemplateOverride);
     getField("prompt-template-reset").addEventListener("click", resetPromptTemplateOverride);
+    bindWorkbenchTabs();
     bindPdfAcquisitionControls();
     initializeSegmentedFilters();
     loadWebDavSettings();
@@ -3595,17 +4322,53 @@
 
   function bindPdfAcquisitionControls() {
     getField("pdf-acquisition-find-candidates")?.addEventListener("click", () => {
-      return findPdfAcquisitionCandidates();
+      return findPdfAcquisitionCandidates(PDF_ACQUISITION_SCOPES.selected);
+    });
+    getField("pdf-acquisition-find-batch-candidates")?.addEventListener("click", () => {
+      return findPdfAcquisitionCandidates(PDF_ACQUISITION_SCOPES.batch);
     });
     getField("pdf-source-scipdf-test-sites")?.addEventListener("click", () => {
-      const settings = readPdfAcquisitionSettings();
-      const resolver = window.WorkbenchSciPdfEmbeddedResolver;
-      const validUrls = resolver ? resolver.normalizeSciPdfBaseUrls(settings.sciPdfBaseUrls) : [];
-      setText("pdf-acquisition-status", `Sci-PDF 站点 ${validUrls.length} 个可用配置`);
+      return testSciPdfAcquisitionSites();
     });
     getField("pdf-source-scipdf-sync-zotero")?.addEventListener("click", () => {
       syncSciPdfResolversToZoteroFindFullText();
     });
+    getField("pdf-acquisition-add-to-write-plan")?.addEventListener("click", () => {
+      addPdfAcquisitionCandidatesToWritePlan();
+    });
+    getField("pdf-acquisition-run-write-queue")?.addEventListener("click", () => {
+      return runZoteroWriteQueue(window.WorkbenchActivePdfAcquisitionWriteQueue);
+    });
+  }
+
+  function bindWorkbenchTabs() {
+    const tabs = [
+      ["workbench-tab-literature-discovery", "literature-discovery-request"],
+      ["workbench-tab-pdf-acquisition", "pdf-acquisition-panel"],
+      ["workbench-tab-zotero-write", "zotero-write-queue-list"]
+    ];
+    for (const [tabId, targetId] of tabs) {
+      getField(tabId)?.addEventListener("click", () => {
+        activateWorkbenchTab(tabId, targetId, tabs);
+      });
+    }
+  }
+
+  function activateWorkbenchTab(activeTabId, targetId, tabs) {
+    for (const [tabId] of Array.isArray(tabs) ? tabs : []) {
+      getField(tabId)?.setAttribute("aria-selected", tabId === activeTabId ? "true" : "false");
+    }
+    const target = getField(targetId);
+    if (!target) {
+      return;
+    }
+    if (typeof target.scrollIntoView === "function") {
+      target.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+    if (typeof target.focus === "function") {
+      target.setAttribute("tabindex", "-1");
+      target.focus();
+    }
   }
 
   if (document.readyState === "loading") {
@@ -3629,6 +4392,10 @@
     createReadingTranslationDraftInput,
     createSummaryDraftInput,
     createSourceAdapters,
+    addPdfAcquisitionCandidatesToWritePlan,
+    findPdfAcquisitionCandidates,
+    renderPdfAcquisitionCandidates,
+    testSciPdfAcquisitionSites,
     createZoteroImportPlan,
     copyGeneratedResult,
     exportWorkbenchState,

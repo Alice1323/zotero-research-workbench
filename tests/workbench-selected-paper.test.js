@@ -69,6 +69,27 @@ test("selected paper runtime reads the first regular Zotero item and normalizes 
   });
 });
 
+test("selected paper runtime preserves DOI values stored in Extra when DOI field is empty", () => {
+  const item = createItem({
+    key: "EXTRA123",
+    fields: {
+      title: "Extra DOI Paper",
+      DOI: "",
+      extra: "DOI: 10.1371/journal.pone.0000308",
+      date: "2024"
+    }
+  });
+  const runtime = createWorkbenchSelectedPaperRuntime({
+    getZotero: () => ({
+      getMainWindow: () => ({ ZoteroPane: { getSelectedItems: () => [item] } })
+    })
+  });
+
+  const context = runtime.readSelectedPaperContext();
+  assert.equal(context.doi, "10.1371/journal.pone.0000308");
+  assert.match(context.extra, /DOI: 10.1371\/journal\.pone\.0000308/);
+});
+
 test("selected paper runtime reads all selected regular Zotero items in selection order", () => {
   const first = createItem({
     key: "ITEM1",

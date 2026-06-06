@@ -233,6 +233,19 @@
         color: color-mix(in srgb, CanvasText 72%, transparent);
       }
 
+      .pdf-acquisition-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .secondary-action {
+        border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+        background: ButtonFace;
+        color: ButtonText;
+      }
+
       .pdf-source-grid {
         display: grid;
         grid-template-columns: minmax(220px, 1.4fr) minmax(180px, 0.9fr);
@@ -285,6 +298,30 @@
         border: 1px solid color-mix(in srgb, CanvasText 14%, transparent);
         border-radius: 6px;
         background: Canvas;
+      }
+
+      .pdf-candidate-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .pdf-candidate-title-row strong {
+        min-width: 0;
+      }
+
+      .pdf-diagnostics {
+        display: grid;
+        gap: 4px;
+        padding: 8px;
+        border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+        border-radius: 6px;
+        background: color-mix(in srgb, CanvasText 3%, Canvas);
+        color: color-mix(in srgb, CanvasText 78%, transparent);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font: menu;
       }
 
       .pdf-write-actions {
@@ -466,9 +503,12 @@
             <div class="pdf-acquisition-hero">
               <div>
                 <h2>PDF 获取</h2>
-                <p>从选中文献、发现候选或 DOI 列表生成可复核 PDF 候选</p>
+                <p>优先处理当前选中文献；批量 DOI 需单独触发</p>
               </div>
-              <button id="pdf-acquisition-find-candidates" type="button" class="primary-action">查找 PDF 候选</button>
+              <div class="pdf-acquisition-actions">
+                <button id="pdf-acquisition-find-candidates" type="button" class="primary-action">查找当前选中文献 PDF</button>
+                <button id="pdf-acquisition-find-batch-candidates" type="button" class="secondary-action">批量查找候选 DOI</button>
+              </div>
             </div>
             <div class="pdf-source-grid">
               <div class="pdf-source-card pdf-source-card-primary">
@@ -478,12 +518,22 @@
                 </label>
                 <label>
                   <span>Sci-Hub 站点列表</span>
-                  <textarea id="pdf-source-scipdf-base-urls" rows="4">https://sci-hub.se/
+                  <textarea id="pdf-source-scipdf-base-urls" rows="8">https://sci-hub.red/
+https://sci-hub.box/
+https://sci-hub.su/
+https://sci-hub.ru/
+https://sci-hub.se/
 https://sci-hub.st/
-https://sci-hub.ru/</textarea>
+https://sci-hub.ren/
+https://sci-hub.ee/
+https://sci-hub.wf/
+https://sci-hub.tf/
+https://sci-hub.pub/
+https://sci-hub.hkvisa.net/</textarea>
                 </label>
                 <div class="actions">
                   <button id="pdf-source-scipdf-test-sites" type="button">测试站点</button>
+                  <span id="pdf-source-scipdf-test-status" class="status" aria-live="polite">尚未测试</span>
                 </div>
                 <label class="checkbox-label">
                   <input id="pdf-source-scipdf-sync-enabled" type="checkbox" />
@@ -521,9 +571,12 @@ https://sci-hub.ru/</textarea>
             <div id="pdf-acquisition-candidate-list" class="pdf-candidate-list" aria-live="polite">
               <div class="pdf-candidate-row">暂无 PDF 候选</div>
             </div>
+            <div id="pdf-acquisition-diagnostics" class="pdf-diagnostics" aria-live="polite">PDF 获取诊断：尚未运行</div>
             <div class="pdf-write-actions">
-              <button id="pdf-acquisition-add-to-write-plan" type="button">批量加入写入计划</button>
-              <span class="status">写入动作与搜索动作分离；执行队列前仍需确认。</span>
+              <button id="pdf-acquisition-add-to-write-plan" type="button">全部候选加入写入计划</button>
+              <button id="pdf-acquisition-run-write-queue" type="button">运行写入队列</button>
+              <span id="pdf-acquisition-inline-write-queue" class="status">加入 PDF 后可直接运行写入队列。</span>
+              <span class="status">单条 PDF 可在候选行加入；执行队列前仍需确认。</span>
             </div>
           </section>
           <div class="section-header">
